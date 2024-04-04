@@ -1,0 +1,4 @@
+﻿block,Species,pH_Treatment,Temp_Treatment,Date,FileName,Light_Dark,chamber.channel,ID,BLANK,notes,start.time,stop.time,volume,AFDW
+A1,Snail,8,16,3/30/2024,Ch2_Calcification_O2,Dark,2,1,0,good,15:58:00,16:56:00,126.5,1
+A1,Snail,8,16,3/30/2024,Ch3_Calcification_O2,Dark,3,2,0,good,15:58:00,16:56:00,126.5,1
+A1,Snail,8,16,3/30/2024,Ch4_Calcification_Blank_O2,Dark,4,3,1,good,15:58:00,16:56:00,128,0
