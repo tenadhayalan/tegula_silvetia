@@ -39,8 +39,8 @@ snail_ID,snail_colors,blotted_wet_weight_g,shell_length_mm,shell_width_mm,tank,p
 28,red-pink-dark green,1.9808,14.84,16.59,10,7.5,16,161608
 51,dark green-light green-pink,1.8016,14.5,15.15,10,7.5,16,161612
 55,pink-red-pink-dark green,2.1359,16.3,16.36,11,7.6,20,161668
-45,dark green-pink-red,1.769,15.15,15.53,11,7.6,20,161641
-48,dark green-red-pink,2.252,15.97,16.7,11,7.6,20,161688
+40,light green-red-dark green,1.8171,14.28,14.88,11,7.6,20,161641
+48,dark green-red-pink,2.252,15.97,16.7,11,7.6,20,161628
 75,pink-dark green-red-pink,1.5974,13.7,15.43,12,7.2,16,161638
 60,pink-red-dark green-red,2.1022,14.51,16.38,12,7.2,16,161648
 1,pink,2.6567,16.9,16.76,12,7.2,16,161666
@@ -66,7 +66,7 @@ snail_ID,snail_colors,blotted_wet_weight_g,shell_length_mm,shell_width_mm,tank,p
 12,light green-red,2.777,17.46,17.09,,,,
 65,pink-light green-red-light green,2.1557,15.54,15.9,,,,
 52,dark green-light green-red,2.6038,15.89,17.47,,,,
-40,light green-red-dark green,1.8171,14.28,14.88,,,,
+45,dark green-pink-red,1.769,15.15,15.53,,,,
 24,pink-dark green-red,1.8234,15.96,15.4,,,,
 54,pink-red-pink-light green,1.8148,15.04,15.82,,,,
 36,light green-pink-red,2.2714,15.55,16.1,,,,

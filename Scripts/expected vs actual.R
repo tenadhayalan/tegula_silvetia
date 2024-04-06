@@ -16,7 +16,7 @@ ggplot(data=pHData, aes(x=expected_pH,y=pH, group = interaction(expected_pH,disc
   theme_bw()
 
 ##daily data
-todayspH <- subset(pHData, date %in% c("20240404"))
+todayspH <- subset(pHData, date %in% c("20240405"))
 todayspH$discrete <- cut(todayspH$expected_temp, breaks = 2, labels = c("Low", "High"))
 ggplot(data=todayspH, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discrete), fill = discrete, color = discrete))+
   geom_boxplot(alpha=0.5, outlier.alpha=0) + 
@@ -28,7 +28,7 @@ ggplot(data=todayspH, aes(x=expected_pH,y=pH, group = interaction(expected_pH,di
   labs(x="Expected pH", y= "Measured pH")+
   theme_bw()
 
-##temp plots
+  ##temp plots
 
 #expected vs actual
 pHData$discrete <- cut(pHData$expected_temp, breaks = 2, labels = c("Low", "High"))
