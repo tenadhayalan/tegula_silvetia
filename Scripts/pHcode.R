@@ -32,7 +32,7 @@ pHData<-pHData%>%
 pHSlope<-pHcalib %>%
   # extract only the orion data
   nest_by(TrisCalDate)%>%
-  mutate(fitpH = list(lm(mVTris~TTris, data = TrisCalibrationLog))) %>% # linear regression of mV and temp of the tris
+  mutate(fitpH = list(lm(mVTris~TTris, data = data))) %>% # linear regression of mV and temp of the tris
   summarise(broom::tidy(fitpH)) %>% # make the output tidy
   select(TrisCalDate, term, estimate) %>%
   pivot_wider(names_from = term, values_from = estimate) %>%# put slope and intercept in their own column

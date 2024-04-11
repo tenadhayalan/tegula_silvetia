@@ -16,7 +16,7 @@ ggplot(data=pHData, aes(x=expected_pH,y=pH, group = interaction(expected_pH,disc
   theme_bw()
 
 ##daily data
-todayspH <- subset(pHData, date %in% c("20240407"))
+todayspH <- subset(pHData, date %in% c("20240410"))
 todayspH$discrete <- cut(todayspH$expected_temp, breaks = 2, labels = c("Low", "High"))
 ggplot(data=todayspH, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discrete), fill = discrete, color = discrete))+
   geom_boxplot(alpha=0.5, outlier.alpha=0) + 
@@ -29,7 +29,7 @@ ggplot(data=todayspH, aes(x=expected_pH,y=pH, group = interaction(expected_pH,di
   theme_bw()
 
 ##data without acclimation
-noacc <- pHData[-(1:54),]
+noacc <- pHData[-(1:162),]
 noacc$discrete <- cut(noacc$expected_temp, breaks = 2, labels = c("Low", "High"))
 ggplot(data=noacc, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discrete), fill = discrete, color = discrete))+
   geom_boxplot(alpha=0.5, outlier.alpha=0) + 
