@@ -1,9 +1,15 @@
+# pH and temperature plots
+# by: tena 
+# updated: 04/16/2024
+
+####-----libraries------####
 library(tidyverse)
 library(ggplot2)
 
+####-----load data------####
 pHData <- read_csv(here("Data","pH_temp","ph_temp_final.csv"))
 
-##ph plots
+####-----ph plots------####
 pHData$discrete <- cut(pHData$expected_temp, breaks = 2, labels = c("Low", "High"))
 ggplot(data=pHData, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discrete), fill = discrete, color = discrete))+
   geom_boxplot(alpha=0.5, outlier.alpha=0) + 
@@ -37,9 +43,10 @@ ggplot(data=noacc, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discr
   scale_color_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
   labs(x="Expected pH", y= "Measured pH")+
   theme_bw()
-##temp plots
 
-#expected vs actual
+####-----temp plots------####
+
+##expected vs actual
 pHData$discrete <- cut(pHData$expected_temp, breaks = 2, labels = c("Low", "High"))
 ggplot(data=pHData, aes(x=expected_temp,y=TempInSitu, group=expected_temp, fill=discrete))+
   geom_boxplot(alpha=0.5, outlier.alpha=0) + 
@@ -48,7 +55,7 @@ ggplot(data=pHData, aes(x=expected_temp,y=TempInSitu, group=expected_temp, fill=
   labs(x="Expected temp", y= "Measured temp")+
   theme_bw()
 
-#with pH included
+##with pH included
 ggplot(data=na.omit(pHData), aes(x=pH,y=TempInSitu, group = interaction(expected_temp,pH), fill = pH, color = pH))+
   geom_boxplot(alpha=0.5, outlier.alpha=0) + 
   labs(x="pH", y= "Measured temp")+
