@@ -14,7 +14,7 @@ predation <- read_csv(here("Data","growth","rockweed_weights.csv"))
 predation_wide <- predation %>%
   pivot_wider(values_from = weight_g, names_from=date) %>% #combine data by date
   clean_names() %>%
-  mutate(percent_change=100*(x20240417-x20240410)/x20240410) #calculate diff between weeks
+  mutate(percent_change=100*(x20240410-x20240403)/x20240403) #calculate diff between weeks
 
 ####-----creating plots------####
 ##plot by predation
