@@ -1,6 +1,6 @@
 library(tidyverse)
 
-tegula <- read.csv("Data/growth/20240329_tegula_initial.csv")
+tegula <- read.csv("Data/growth/tegula_initial_may.csv")
 
 tegula$pH= as.character(tegula$pH)
 

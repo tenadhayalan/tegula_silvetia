@@ -5,6 +5,7 @@
 ####-----libraries------####
 library(tidyverse)
 library(ggplot2)
+library(psych)
 
 ####-----load data------####
 pHData <- read_csv(here("Data","pH_temp","ph_temp_final.csv"))
@@ -69,3 +70,12 @@ ggplot(data=pHData, aes(x=date,y=TempInSitu, group=expected_temp, fill=discrete)
   labs(x="Date", y= "Temperature")+
   theme_bw()
 
+ggplot(data=pHData, aes(x=date,y=pH, group=expected_pH, fill=expected_pH))+
+  geom_smooth(method="lm") + 
+  geom_jitter(width=0.25, pch=21, size=2) +
+  labs(color = "pH", x="Date", y= "pH")+
+  theme_bw()
+
+####------summary stats-----####
+describe.by(pHData,"expected_pH")
+describe.by(pHData, "expected_temp")
