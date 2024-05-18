@@ -14,13 +14,13 @@ library(patchwork)
 
 ## bring in pH calibration files and raw data files
 
-TrisCalibrationLog<- read.csv("Data/pH_temp/tris_cal.csv")
+TrisCalibrationLog<- read.csv("Data/pH_temp/tris_cal_may.csv")
 
 pHcalib<-TrisCalibrationLog %>%
   mutate(TrisCalDate = ymd(date))
 
 
-pHData<-read.csv("Data/pH_temp/pH_temp.csv")
+pHData<-read.csv("Data/pH_temp/pH_temp_may.csv")
 pHData<-pHData%>%
   mutate(TrisCalDate = ymd(TrisCalDate),
          Sampling_Date = ymd(date))
@@ -44,4 +44,4 @@ pHSlope<-pHcalib %>%
 
 view(pHSlope)
 
-write.csv(pHSlope, "Data/pH_temp/ph_temp_final.csv")
+write.csv(pHSlope, "Data/pH_temp/ph_temp_may_final.csv")
