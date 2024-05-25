@@ -67,7 +67,7 @@ Sample.Info$stop.time <- as.POSIXct(Sample.Info$stop.time,format="%H:%M:%S", tz 
 for (i in 1: length(file.names.full)) {
   FRow<-which(Sample.Info$FileName==strsplit(file.names[i], '.csv')) #stringsplit this renames our file
   Respo.Data1 <-read_csv(file.path(path.p, file.names.full[i]), skip = 1) %>%
-    select(Time,Value,Temp) %>% # keep only what we need
+    dplyr::select(Time,Value,Temp) %>% # keep only what we need
     mutate(Time = as.POSIXct(Time, format="%H:%M:%S", tz = "")) %>% # convert time
     drop_na() # drop NAs
   
@@ -127,20 +127,20 @@ for (i in 1: length(file.names.full)) {
 #this allows me to not have to run the for loop again 
 write_csv(Respo.R, here("Data",
                         "PR_2024",
-                        "Respo_20240330.csv"))  
+                        "Respo_final.csv"))  
 
 Respo.R <- read_csv(here("Data",
                          "PR_2024",
-                         "Respo_20240330.csv"))  
+                         "Respo_final.csv"))  
 
 # Calculate Respiration rate
 
 Respo.R<-Respo.R %>%
   drop_na(FileName) %>% # drop NAs
-  left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
   mutate(umol.sec = umol.L.sec*(volume/1000)) %>% #Account for chamber volume to convert from umol L-1 s-1 to umol s-1. This standardizes across water volumes (different because of coral size) and removes per Liter
   mutate_if(sapply(., is.character), as.factor) %>% #convert character columns to factors
   mutate(BLANK = as.factor(BLANK)) #make the blank column a factor
+  left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
 
 
 #View(Respo.R)
@@ -151,21 +151,21 @@ Respo.R<-Respo.R %>%
 #View(Respo.R)
 
 Respo.R_Normalized <- Respo.R %>%
-  group_by(block,pH_Treatment, Light_Dark, Species, BLANK)%>% # also add block here if one blank per block #add light dark for rockweed
+  group_by(block, pH_treatment, Light_Dark, Species, BLANK)%>% # also add block here if one blank per block #add light dark for rockweed
   summarise(umol.sec = mean(umol.sec, na.rm=TRUE)) %>%
   filter(BLANK ==1)%>% # only keep the actual blanks
-  select(pH_Treatment,block,Light_Dark, Species, blank.rate = umol.sec) %>% # only keep what we need and rename the blank rate column
-  right_join(Respo.R) %>% # join with the respo data %>%
+  dplyr::select(block, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>% # only keep what we need and rename the blank rate column
+  right_join(Respo.R, by = c("block", "pH_treatment", "Light_Dark", "Species")) %>% # join with the respo data %>%
   mutate(umol.sec.corr = umol.sec - blank.rate, # subtract the blank rates from the raw rates
-         mmol.gram.hr = 0.001*(umol.sec.corr*3600)/AFDW)  %>% # convert to mmol g hr-1
+         mmol.gram.hr = 0.001*(umol.sec.corr*3600)/wet_weight)  %>% # convert to mmol g hr-1 #REPLACED WET WEIGHT
   filter(BLANK ==0) %>% # remove all the blank data
-  select(Date, Species, pH_Treatment, Temp_Treatment, Light_Dark, ID, AFDW, mmol.gram.hr) #keep only what we need
+  dplyr::select(Date, Species, pH_treatment, temp_treatment, Light_Dark, ID, wet_weight, mmol.gram.hr) #keep only what we need #REPLACED WITH WET WEIGHT
 
 #View(Respo.R_Normalized)
 
 # pivot the data so that light and dark have their own column for net P and R
 Respo.R_Normalized<- Respo.R_Normalized %>%
-  select(!Date) %>%
+  dplyr::select(!Date) %>%
   pivot_wider(names_from = Light_Dark, values_from = mmol.gram.hr) %>%
   rename(Respiration = Dark)%>% 
          # NetPhoto = Light) %>% # rename the columns
@@ -178,7 +178,7 @@ Respo.R_Normalized<- Respo.R_Normalized %>%
 
 write_csv(Respo.R_Normalized,here("Data",
                                   "PR_2024",
-                                  "PR_final_normalized_2024_03_30.csv"))# export all the uptake rates
+                                  "PR_final_normalized_april.csv"))# export all the uptake rates
 View(Respo.R)
 
 # make plot x pH y respiration and color temperature

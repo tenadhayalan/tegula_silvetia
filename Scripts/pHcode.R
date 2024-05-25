@@ -34,7 +34,7 @@ pHSlope<-pHcalib %>%
   nest_by(TrisCalDate)%>%
   mutate(fitpH = list(lm(mVTris~TTris, data = data))) %>% # linear regression of mV and temp of the tris
   summarise(broom::tidy(fitpH)) %>% # make the output tidy
-  select(TrisCalDate, term, estimate) %>%
+  dplyr::select(TrisCalDate, term, estimate) %>%
   pivot_wider(names_from = term, values_from = estimate) %>%# put slope and intercept in their own column
   right_join(.,pHData) %>% # join with the pH sample data
   mutate(mVTris = TempInSitu*TTris + `(Intercept)`) %>% # calculate the mV of the tris at temperature in which the pH of samples were measured
