@@ -1,1 +1,0 @@
-# tegula_silvetia
