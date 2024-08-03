@@ -8,7 +8,7 @@ library(ggplot2)
 library(psych)
 
 ####-----load data------####
-pHData <- read_csv(here("Data","pH_temp","ph_temp_final.csv"))
+pHData <- read_csv(here("Data","pH_temp","ph_temp_may_final.csv"))
 
 ####-----ph plots------####
 pHData$discrete <- cut(pHData$expected_temp, breaks = 2, labels = c("Low", "High"))

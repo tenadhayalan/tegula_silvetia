@@ -27,10 +27,10 @@ library(stringr)
 ## Load datasets 
 
 ```{r}
-respo <- read_csv(here("Data","PR_2024","Metadata.csv"))
+respo <- read_csv(here("Data","PR_2024","Metadata_combined.csv"))
 respo <- respo %>%
   filter(Species == "Tegula")
-calc <- read_csv(here("Data", "TA", "April_calcification.csv"))
+calc <- read_csv(here("Data", "TA", "Calcification_clean.csv"))
 ```
 
 ### Calculating calcification based on TA 
@@ -47,7 +47,8 @@ initial_mean <- initial %>%
 
 #bring initials into data frame by tank
 calc <- calc %>%
-  left_join(initial_mean, by= "tank")
+  left_join(initial_mean, by= c("tank"))
+
 
 #get blank data
 rows.blank <- which(calc$sample_type == "Blank") #tells you all the rows that you have with blank
@@ -67,6 +68,7 @@ calc <- left_join(calc, mean.blanks) #bring in mean blanks to calc.data
 #bring in time, mass, volume
 
 time.data <- respo[, c("ID", "tank", "pH_treatment", "temp_treatment", "volume", "wet_weight", "TA.start", "TA.stop")] 
+calc$tank <- as.character(calc$tank) # convert tank to character to join
 
 full.calc <- left_join(calc, time.data)
 
@@ -90,15 +92,32 @@ clean.full.calc$volume <- clean.full.calc$volume * 0.001
 clean.full.calc$umol.cm2.hr<-((clean.full.calc$deltaTA/2)*(1.025)*(clean.full.calc$volume))/((clean.full.calc$wet_weight)*(clean.full.calc$timediff))
 
 
+write_csv(clean.full.calc, here("Data","TA","NEC.csv"))
 
-## try plotting 
-ggplot(data=clean.full.calc, aes(x=pH_treatment, y=umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), color=temp_treatment))+
-  geom_boxplot() +
-  geom_jitter(position = position_jitter(width = 0.05)) + 
+## check blanks
+
+blanks %>%
+  ggplot(aes(x=tank, y=TA))+
+  geom_point()+
   theme_bw() +
   theme(strip.background = element_rect(fill = "white"))+
-  labs(x = "pH treatment",
-       color = "Temperature treatment",
-       y = "Rate (umol O2 cm2 hr-1)",
-       title = "Rate of Calcification") 
+  labs(title="Blanks")
+
+initial %>%
+  ggplot(aes(x=tank, y=TA))+
+  geom_point()+
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))+
+  labs(title="Initial")
+
+## try plotting 
+ggplot(data=clean.full.calc, aes(x=pH_treatment, y=umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), color=as.factor(temp_treatment)))+
+  geom_boxplot(outlier.shape=NA) +
+  geom_point()+
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))+
+  scale_color_manual(values=c("salmon", "salmon4"))+
+  labs(x = "pH",
+       color = "Temperature",
+       y = "Rate (umol CO3 g-1 hr-1)")
 ```

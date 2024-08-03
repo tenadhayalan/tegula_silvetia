@@ -52,7 +52,7 @@ colnames(Respo.R) <- c("FileName","Intercept", "umol.L.sec","Temp.C")
 #Load your respiration data file, with all the times, water volumes(mL), snail weight (dry weight) (g)
 Sample.Info <- read_csv(file = here("Data",
                                     "PR_2024",
-                                    "Metadata.csv"))
+                                    "Metadata_combined.csv"))
 #View(Sample.Info)
 
 ##### Make sure times are consistent ####
@@ -128,19 +128,20 @@ for (i in 1: length(file.names.full)) {
 write_csv(Respo.R, here("Data",
                         "PR_2024",
                         "Respo_final.csv"))  
+####----after loop----####
 
 Respo.R <- read_csv(here("Data",
                          "PR_2024",
-                         "Respo_final.csv"))  
+                         "Respo_final_clean_avg.csv"))  
 
 # Calculate Respiration rate
 
 Respo.R<-Respo.R %>%
+  left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
   drop_na(FileName) %>% # drop NAs
-  mutate(umol.sec = umol.L.sec*(volume/1000)) %>% #Account for chamber volume to convert from umol L-1 s-1 to umol s-1. This standardizes across water volumes (different because of coral size) and removes per Liter
+  mutate(umol.sec = umol.L.sec*(volume/1000)) %>% #Account for chamber volume to convert from umol L-1 s-1 to umol s-1. This standardizes across water volumes and removes per Liter
   mutate_if(sapply(., is.character), as.factor) %>% #convert character columns to factors
   mutate(BLANK = as.factor(BLANK)) #make the blank column a factor
-  left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
 
 
 #View(Respo.R)
@@ -157,28 +158,64 @@ Respo.R_Normalized <- Respo.R %>%
   dplyr::select(block, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>% # only keep what we need and rename the blank rate column
   right_join(Respo.R, by = c("block", "pH_treatment", "Light_Dark", "Species")) %>% # join with the respo data %>%
   mutate(umol.sec.corr = umol.sec - blank.rate, # subtract the blank rates from the raw rates
-         mmol.gram.hr = 0.001*(umol.sec.corr*3600)/wet_weight)  %>% # convert to mmol g hr-1 #REPLACED WET WEIGHT
+         umol.gram.hr = (umol.sec.corr*3600)/wet_weight)  %>% # convert to umol g hr-1 #REPLACED WET WEIGHT
   filter(BLANK ==0) %>% # remove all the blank data
-  dplyr::select(Date, Species, pH_treatment, temp_treatment, Light_Dark, ID, wet_weight, mmol.gram.hr) #keep only what we need #REPLACED WITH WET WEIGHT
+  dplyr::select(Date, Species, pH_treatment, temp_treatment, Light_Dark, ID, wet_weight, umol.gram.hr) #keep only what we need #REPLACED WITH WET WEIGHT
 
 #View(Respo.R_Normalized)
 
 # pivot the data so that light and dark have their own column for net P and R
 Respo.R_Normalized<- Respo.R_Normalized %>%
   dplyr::select(!Date) %>%
-  pivot_wider(names_from = Light_Dark, values_from = mmol.gram.hr) %>%
+  pivot_wider(names_from = Light_Dark, values_from = umol.gram.hr) %>%
   rename(Respiration = Dark)%>% 
          # NetPhoto = Light) %>% # rename the columns
   mutate(Respiration = - Respiration # Make respiration positive
         # GrossPhoto = Respiration + NetPhoto
   )
 
-
-
-
 write_csv(Respo.R_Normalized,here("Data",
                                   "PR_2024",
-                                  "PR_final_normalized_april.csv"))# export all the uptake rates
-View(Respo.R)
+                                  "PR_final_normalized_clean.csv"))# export all the uptake rates
+
+#####------plot------####
+
+# look at blanks
+Respo.R %>% 
+  filter(BLANK == "1") %>%
+  filter(Species == "Rockweed") %>%
+  ggplot(aes(x=as.factor(pH_treatment),y=umol.L.sec, group = interaction(pH_treatment, temp_treatment), color=temp_treatment))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_point()
+    
+Respo.R %>% 
+  filter(BLANK == "1") %>%
+  filter(Species == "Tegula") %>%
+  ggplot(aes(x=as.factor(pH_treatment),y=umol.L.sec, group = interaction(pH_treatment, temp_treatment), color=temp_treatment))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_point()
 
 # make plot x pH y respiration and color temperature
+
+Respo.R_Normalized %>% 
+  mutate(gp=Light+Respiration) %>%
+  ggplot(aes(x=as.factor(pH_treatment), y=gp, color=as.factor(temp_treatment)))+
+  geom_point()+
+  geom_boxplot(outlier.shape = NA)
+
+# resp
+Respo.R_Normalized %>% 
+  ggplot(aes(x=as.factor(pH_treatment), y=Respiration, color=as.factor(temp_treatment)))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_point()+
+  facet_wrap(~Species, scales = "free_y")
+
+#p v r
+Respo.R_Normalized %>% 
+  mutate(gp=Light+Respiration, 
+         pr=gp/Respiration) %>%
+  ggplot(aes(x=as.factor(pH_treatment), y=pr, color=as.factor(temp_treatment)))+
+  geom_boxplot()
+
+
+#r v c for tegula

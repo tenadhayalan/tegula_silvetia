@@ -8,7 +8,7 @@ library(here)
 library(janitor)
 
 ####-----load data------####
-rw <- read_csv(here("Data","growth","rockweed_weights.csv"))
+rw <- read_csv(here("Data","growth","rockweed_weights_may.csv"))
 
 ####-----make plot-----####
 rw %>%
