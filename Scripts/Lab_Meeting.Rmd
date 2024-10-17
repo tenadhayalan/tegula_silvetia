@@ -1,0 +1,758 @@
+---
+title: "9/25 Lab Meeting"
+author: "Tena Dhayalan"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: cosmo
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+  
+```{r,echo=FALSE, message=FALSE}
+library(knitr)
+require(kableExtra)
+library(tidyverse)
+options(knitr.table.format = "html")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,    # Show warnings
+  message = FALSE,    # Show messages
+  error = FALSE       # Show errors
+)
+```
+
+# Question
+How do ocean warming and acidification affect *Silvetia compressa* and *Tegula eiseni* individually and their resulting interaction
+
+# Hypotheses
+1. Both species will converge in their response to warming
+2. *Tegula* will be more negatively affected by decreasing pH than *Silvetia*
+
+# Experimental Design
+- 2 30-day experiments
+- 9 pHs (7.2-8.0)
+- 2 temps (14^C, 16^C)
+- each tank has 3 no predator controls and 3 predator treatments
+
+## Measuring:
+- **growth**
+- **respiration**
+- **calcification**
+- predation
+
+# Loading libraries 
+```{r}
+library(dplyr)
+library(broom)
+library(purrr)
+library(lubridate)
+library(tidyverse)
+library(nlstools)
+library(here)
+library(stringr)
+library(lmerTest)
+library(lme4)
+```
+
+
+# Load datasets 
+```{r}
+respo <- read_csv(here("Data","PR_2024","Metadata_combined.csv"))
+respo <- respo %>%
+  filter(Species == "Tegula")
+calc <- read_csv(here("Data", "TA", "Calcification_clean.csv"))
+maypH <- read_csv(here("Data","pH_temp","ph_temp_may_final.csv"))
+aprilpH <- read_csv(here("Data","pH_temp","ph_temp_final.csv"))
+aprilTeg <- read_csv(here("Data","growth","tegula_initial_april.csv"))
+mayTeg <- read_csv(here("Data","growth","tegula_initial_may.csv"))
+Respo.R <- read_csv(here("Data","PR_2024","Respo_final.csv"))
+Sample.Info <- read_csv(file = here("Data","PR_2024","Metadata_combined.csv"))
+respo_clean <-read.csv(here("Data", "PR_2024","PR_final_normalized_clean.csv"))
+respo_dry_clean <- read.csv(here("Data", "PR_2024","PR_final_normalized_dry_clean.csv"))
+```
+
+# pH and temperature
+Data used for these plots are the daily measurements taken using the Orion and Temperature probe, haven't included Apex or HOBO logging so these are snapshots rather than continuous measurements.
+
+## April
+```{r echo=FALSE}
+aprilpH$discrete <- cut(aprilpH$expected_temp, breaks = 2, labels = c("Low", "High"))
+ggplot(data=aprilpH, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discrete), fill = discrete, color = discrete))+
+  geom_boxplot(alpha=0.5, outlier.alpha=0) + 
+  scale_y_continuous(breaks = seq(7.0, 8.1, by=0.1), limits=c(7.0,8.1))+
+  scale_x_continuous(breaks = seq(7.1, 8.1, by=0.1), limits=c(7.1,8.1))+
+  scale_fill_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  scale_color_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  labs(title = "April pH", x="Expected pH", y= "Measured pH")+
+  theme_bw()
+aprilpH$discrete <- cut(aprilpH$expected_temp, breaks = 2, labels = c("Low", "High"))
+ggplot(data=aprilpH, aes(x=expected_temp,y=TempInSitu, group=expected_temp, fill=discrete))+
+  geom_boxplot(alpha=0.5, outlier.alpha=0) + 
+  scale_fill_manual(values=c("Low" ="#0072B2", "High"="tomato"))+
+  #geom_jitter(width=0.25, pch=21, size=2) +
+  labs(title = "April temperature", x="Expected temp", y= "Measured temp")+
+  theme_bw()
+```
+
+## May
+```{r echo=FALSE}
+maypH$discrete <- cut(maypH$expected_temp, breaks = 2, labels = c("Low", "High"))
+ggplot(data=maypH, aes(x=expected_pH,y=pH, group = interaction(expected_pH,discrete), fill = discrete, color = discrete))+
+  geom_boxplot(alpha=0.5, outlier.alpha=0) + 
+  scale_y_continuous(breaks = seq(7.0, 8.1, by=0.1), limits=c(7.0,8.1))+
+  scale_x_continuous(breaks = seq(7.1, 8.1, by=0.1), limits=c(7.1,8.1))+
+  scale_fill_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  scale_color_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  labs(title = "May pH", x="Expected pH", y= "Measured pH")+
+  theme_bw()
+maypH$discrete <- cut(maypH$expected_temp, breaks = 2, labels = c("Low", "High"))
+ggplot(data=maypH, aes(x=expected_temp,y=TempInSitu, group=expected_temp, fill=discrete))+
+  geom_boxplot(alpha=0.5, outlier.alpha=0) + 
+  scale_fill_manual(values=c("Low" ="#0072B2", "High"="tomato"))+
+  #geom_jitter(width=0.25, pch=21, size=2) +
+  labs(title = "May temperature", x="Expected temp", y= "Measured temp")+
+  theme_bw()
+```
+
+# Growth
+Simply calculated as the final weight - initial weight
+
+## Wet weight
+
+### April
+```{r}
+aprilTeg <- aprilTeg[-16,] #outlier
+aprilTeg$wet_weight <- aprilTeg$final_wet_weight - aprilTeg$blotted_wet_weight_g #calculate final - initial
+aprilTeg$discrete <- cut(aprilTeg$temp, breaks = 2, labels = c("Low", "High")) #separate temperature treatments
+ggplot(data=aprilTeg, aes(x=pH, y=wet_weight, group = interaction(pH,discrete), fill = discrete, color = discrete))+
+  geom_boxplot(alpha=0.5, outlier.alpha=0) + 
+  scale_x_continuous(breaks = seq(7.1, 8.1, by=0.1), limits=c(7.1,8.1))+
+  scale_fill_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  scale_color_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  labs(x="pH", y= "Change in wet weight (g)")+
+  theme_bw()
+```
+
+### May
+```{r}
+mayTeg$wet_weight <- mayTeg$final_wet_weight - mayTeg$blotted_wet_weight_g #calculate final - initial
+mayTeg$discrete <- cut(mayTeg$temp, breaks = 2, labels = c("Low", "High")) #separate temperature treatments
+ggplot(data=mayTeg, aes(x=pH, y=wet_weight, group = interaction(pH,discrete), fill = discrete, color = discrete))+
+  geom_boxplot(alpha=0.5, outlier.alpha=0) + 
+  scale_x_continuous(breaks = seq(7.1, 8.1, by=0.1), limits=c(7.1,8.1))+
+  scale_fill_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  scale_color_manual(values=c("Low" = "#0072B2", "High" = "tomato"))+
+  labs(x="pH", y= "Change in wet weight (g)")+
+  theme_bw()
+```
+
+## Wet weight to dry weight regressions
+
+### April
+```{r}
+aprilWDReg <- lm(aprilTeg$final_dry_weight~aprilTeg$blotted_wet_weight_g) # regression of wet to dry weight
+april_sum <- summary(aprilWDReg) # get model summary
+april_r <- april_sum$r.squared
+plot(aprilTeg$blotted_wet_weight_g,aprilTeg$final_dry_weight, xlab = "Final wet weight (g)", ylab = "Final dry weight (g)") #plot wet weight x dry weight
+abline(aprilWDReg) # add regression line
+text(3.3, 0.1, paste("R² =", round(april_r, 2)), col="black", cex=1.2)
+
+```
+
+### May
+```{r}
+mayWDReg <- lm(mayTeg$final_dry_weight~mayTeg$blotted_wet_weight_g) # regression of wet weight to dry weight
+may_sum <- summary(mayWDReg)
+may_r <- may_sum$r.squared
+plot(mayTeg$blotted_wet_weight_g,mayTeg$final_dry_weight, xlab = "Final wet weight (g)", ylab = "Final dry weight (g)") #plot wet weight x dry weight
+abline(mayWDReg) # add regression line
+text(2.3, 0.05, paste("R² =", round(may_r, 2)), col="black", cex=1.2)
+        
+```
+
+## Without shell weight
+
+### April
+```{r}
+aprilTeg$wet_body <- aprilTeg$blotted_wet_weight_g-aprilTeg$dry_shell
+aprilWDReg2 <- lm(aprilTeg$final_dry_weight~aprilTeg$wet_body) # regression of wet to dry weight
+april_sum2 <- summary(aprilWDReg2) # get model summary
+april_r2 <- april_sum2$r.squared
+plot(aprilTeg$wet_body,aprilTeg$final_dry_weight, xlab = "Final wet weight - shell (g)", ylab = "Final dry weight (g)")+ #plot wet weight x dry weight
+abline(aprilWDReg2) # add regression line
+text(0.65, 0.1, paste("R² =", round(april_r2, 2)), col="black", cex=1.2)
+
+```
+
+### May
+```{r}
+mayTeg$wet_body <- mayTeg$blotted_wet_weight_g-mayTeg$dry_shell
+mayWDReg2 <- lm(mayTeg$final_dry_weight~mayTeg$wet_body) # regression of wet to dry weight
+may_sum2 <- summary(mayWDReg2) # get model summary
+may_r2 <- may_sum2$r.squared
+plot(mayTeg$wet_body,mayTeg$final_dry_weight, xlab = "Final wet weight - shell (g)", ylab = "Final dry weight (g)")+ #plot wet weight x dry weight
+abline(mayWDReg2) # add regression line
+text(0.2, 0.05, paste("R² =", round(may_r2, 2)), col="black", cex=1.2)
+
+```
+
+# Respiration
+```{r}
+Respo.R<-Respo.R %>% # Bring in respo data post-thinning
+  left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
+  mutate(umol.sec = umol.L.sec*(volume/1000)) %>% #Account for chamber volume to convert from umol L-1 s-1 to umol s-1. This standardizes across water volumes and removes per Liter
+  mutate_if(sapply(., is.character), as.factor) %>% #convert cha-=racter columns to factors
+  mutate(BLANK = as.factor(BLANK)) #make the blank column a factor
+
+```
+
+### Check blanks
+Clearly an outlier, decided to average blanks per pH treatment
+```{r}
+Respo.R %>% 
+  filter(BLANK == "1") %>%
+  filter(Species == "Tegula") %>%
+  ggplot(aes(x=as.factor(pH_treatment),y=umol.L.sec, group = interaction(pH_treatment, temp_treatment), color=temp_treatment))+
+  geom_boxplot()+
+  geom_point()
+
+```
+
+## Wet weight
+```{r}
+respo_clean$temp_treatment <- as.factor(respo_clean$temp_treatment)
+respo_clean$experiment <- as.numeric(respo_clean$experiment)
+tegrespo <- respo_clean %>%
+  filter(Species == "Tegula") ##filter out rockweeds
+
+teganova_reduced <- lm(Respiration ~ poly(pH_treatment,2) * temp_treatment, data=tegrespo)
+#plot(teganova) #check assumptions
+anova(teganova_reduced)
+
+#with random effect
+teganova_full <- lmer(Respiration ~ poly(pH_treatment,2) * temp_treatment + (1|experiment), data=tegrespo)
+anova(teganova_full)
+anova(teganova_full,teganova_reduced) #full model is better
+summary(teganova_full)
+
+#prediction for model
+tegrespo <- tegrespo %>%
+  mutate(model = predict(teganova_reduced))
+
+```
+
+Respiration increases with temperature
+
+```{r echo=FALSE}
+tegrespo %>%
+  ggplot(aes(x=as.factor(pH_treatment), y=Respiration, fill=as.factor(temp_treatment)))+
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Respiration~rate~(μmol~O[2]~g^-1~hr^-1)))
+```
+
+## Respo vs initial size
+```{r echo=FALSE}
+tegsizerespo <- Respo.R %>%
+  filter(Species == "Tegula") ##filter out rockweeds
+tegsizerespo$initial_wet_weight <- as.numeric(tegsizerespo$initial_wet_weight)
+tegsizerespo %>%
+  ggplot(aes(x=initial_wet_weight, y=umol.L.sec))+
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  facet_wrap(~experiment)+
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  #geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) 
+  #labs(x = expression(pH[T]),
+   #    color = "Temperature",
+    #   fill = "Temperature",
+     #  y = expression(Respiration~rate~(μmol~O[2]~g^-1~hr^-1)))
+```
+
+## Dry Weight
+
+```{r}
+Respo.R_Normalized_Dry <- Respo.R %>%
+  group_by(block, pH_treatment, Light_Dark, Species, BLANK)%>% 
+  summarise(umol.sec = mean(umol.sec, na.rm=TRUE)) %>%
+  filter(BLANK ==1)%>% # only keep the actual blanks
+  dplyr::select(block, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>% # only keep what we need and rename the blank rate column
+  right_join(Respo.R, by = c("block", "pH_treatment", "Light_Dark", "Species")) %>% # join with the respo data %>%
+  mutate(umol.sec.corr = umol.sec - blank.rate, # subtract the blank rates from the raw rates
+         umol.gram.hr = (umol.sec.corr*3600)/dry_weight)  %>% # convert to umol g hr-1
+  filter(BLANK ==0) %>% # remove all the blank data
+  dplyr::select(Date, Species, pH_treatment, temp_treatment, Light_Dark, ID, dry_weight, umol.gram.hr) #keep only what we need-
+
+Respo.R_Normalized_Dry<- Respo.R_Normalized_Dry %>%
+  dplyr::select(!Date) %>%
+  pivot_wider(names_from = Light_Dark, values_from = umol.gram.hr) %>%
+  rename(Respiration = Dark)%>% 
+         # NetPhoto = Light) %>% # rename the columns
+  mutate(Respiration = - Respiration # Make respiration positive
+        # GrossPhoto = Respiration + NetPhoto
+  )
+
+write_csv(Respo.R_Normalized_Dry,here("Data","PR_2024","PR_final_normalized_dry_clean.csv"))# export all the uptake rates
+```
+
+
+```{r echo=FALSE}
+respo_dry_clean$temp_treatment <- as.factor(respo_dry_clean$temp_treatment)
+respo_dry_clean$experiment <- as.numeric(respo_dry_clean$experiment)
+tegrespodry <- respo_dry_clean %>%
+  filter(Species == "Tegula") ##filter out rockweeds
+
+```
+## Linear model?
+
+```{r}
+  teganovadry_reduced_l <- lm(Respiration ~ pH_treatment * temp_treatment, data=tegrespodry)
+ #plot(teganovadry_reduced_l) #check assumptions
+  anova(teganovadry_reduced_l)
+
+  #with experiment, random effect loses too much power
+  teganovadry_full_l <- lm(Respiration ~ pH_treatment * temp_treatment + experiment, data=tegrespodry)
+  anova(teganovadry_full_l)
+  anova(teganovadry_full_l,teganovadry_reduced_l) #full model is better
+
+  #prediction for model
+  tegrespodry_l <- tegrespodry %>%
+  mutate(model = predict(teganovadry_reduced_l))
+  
+#graph
+  tegrespodry_l %>%
+  ggplot(aes(x=as.factor(pH_treatment), y=Respiration, fill=as.factor(temp_treatment)))+
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Respiration~rate~(μmol~O[2]~g^-1~hr^-1)))
+  
+```  
+
+## 2nd Order Polynomial?
+```{r}
+  teganovadry_reduced_2 <- lm(Respiration ~ poly(pH_treatment,2) * temp_treatment, data=tegrespodry)
+  #plot(teganovadry_reduced_2) #check assumptions
+  anova(teganovadry_reduced_2)
+
+  #with experiment effect
+  teganovadry_full_2 <- lm(Respiration ~ poly(pH_treatment,2) * temp_treatment + experiment, data=tegrespodry)
+  anova(teganovadry_full_2)
+  anova(teganovadry_full_2,teganovadry_reduced_2) #full model is better
+
+  #prediction for model
+  tegrespodry_2 <- tegrespodry %>%
+  mutate(model = predict(teganovadry_reduced_2))
+  
+#graph
+  tegrespodry_2 %>%
+  ggplot(aes(x=as.factor(pH_treatment), y=Respiration, fill=as.factor(temp_treatment)))+
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Respiration~rate~(μmol~O[2]~g^-1~hr^-1)))
+```
+
+## Gaussian model?
+```{r}
+  teganovadry_reduced_g <- glm(Respiration ~ pH_treatment * temp_treatment, family = gaussian, data=tegrespodry)
+  #plot(teganovadry_reduced_g) #check assumptions
+  anova(teganovadry_reduced_g)
+
+  #with experiment
+  teganovadry_full_g <- glm(Respiration ~ pH_treatment * temp_treatment + experiment, family = "gaussian", data=tegrespodry)
+  anova(teganovadry_full_g)
+  anova(teganovadry_full_2,teganovadry_reduced_g) #full model is better
+
+  #prediction for model
+  tegrespodry_g <- tegrespodry %>%
+  mutate(model = predict(teganovadry_reduced_g))
+  
+#graph
+  tegrespodry_g %>%
+  ggplot(aes(x=as.factor(pH_treatment), y=Respiration, fill=as.factor(temp_treatment)))+
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Respiration~rate~(μmol~O[2]~g^-1~hr^-1)))
+
+
+```
+### Model comparison
+```{r}
+AIC(teganovadry_full_l)
+AIC(teganovadry_full_2)
+AIC(teganovadry_full_g)
+```
+
+# Calcification
+
+```{r}
+#get initial data
+rows.initial <- which(calc$sample_type == "Initial") #tells you all the rows that you have with initial
+initial <- calc[rows.initial,]
+
+#take means of initial data
+initial_mean <- initial %>%
+  group_by(tank) %>%
+  summarise(TA_initial = mean(TA))
+
+#bring initials into data frame by tank
+calc <- calc %>%
+  left_join(initial_mean, by= c("tank"))
+
+
+#get blank data
+rows.blank <- which(calc$sample_type == "Blank") #tells you all the rows that you have with blank
+blanks <- calc[rows.blank,]
+
+#figure out delta TA, initial-final
+
+blanks$delta.TA.blank <- blanks$TA_initial - blanks$TA
+
+#add blank column
+mean.blanks <- blanks %>% 
+  group_by(tank) %>%
+  summarise(mean.blanks=mean(delta.TA.blank)) 
+
+calc <- left_join(calc, mean.blanks) #bring in mean blanks to calc.data
+
+#bring in time, mass, volume
+
+time.data <- respo[, c("ID", "tank", "pH_treatment", "temp_treatment", "volume", "wet_weight", "TA.start", "TA.stop", "dry_weight", "dry_shell_weight")] 
+calc$tank <- as.character(calc$tank) # convert tank to character to join
+
+full.calc <- left_join(calc, time.data)
+
+##get rid of NAs
+clean.full.calc <- full.calc %>%
+  filter(!is.na(TA.start))
+
+#adjust the time information and format
+clean.full.calc$TA.start <- strptime(as.character(clean.full.calc$TA.start), "%H:%M:%S")
+clean.full.calc$TA.stop <- strptime(as.character(clean.full.calc$TA.stop), "%H:%M:%S")
+#calculate the NEC rate
+
+clean.full.calc$deltaTA<- (clean.full.calc$TA_initial - clean.full.calc$TA) - clean.full.calc$mean.blanks
+clean.full.calc$timediff <- as.numeric((clean.full.calc$TA.stop - clean.full.calc$TA.start)) 
+
+#convert volume from mL to L
+clean.full.calc$volume <- clean.full.calc$volume * 0.001
+
+```
+
+## Normalize to dry weight
+```{r}
+#equation to calculate NEC rates 
+clean.full.calc$umol.cm2.hr<-((clean.full.calc$deltaTA/2)*(1.025)*(clean.full.calc$volume))/((clean.full.calc$dry_weight)*(clean.full.calc$timediff))
+
+
+#write_csv(clean.full.calc, here("Data","TA","NEC.csv"))
+```
+
+### Check blanks and initials
+```{r}
+blanks %>%
+  ggplot(aes(x=tank, y=TA))+
+  geom_point()+
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))+
+  labs(title="Blanks")
+
+initial %>%
+  ggplot(aes(x=tank, y=TA))+
+  geom_point()+
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))+
+  labs(title="Initial")
+```
+
+### Linear?
+```{r}
+#Linear ancova
+  calclin_reduced <- lm(umol.cm2.hr ~ pH_treatment * temp_treatment, data = clean.full.calc)
+  #plot(calcpoly)
+  anova(calclin_reduced)
+
+  #with with effect for experiment
+  calclin_full <-lm(umol.cm2.hr ~ pH_treatment * temp_treatment + experiment, data = clean.full.calc)
+  anova(calclin_full)
+
+  AIC(calclin_full)
+  AIC(calclin_reduced) #lower
+
+clean.full.calc <- clean.full.calc %>%
+  mutate(model = predict(calclin_reduced)) #model prediction for plot
+```
+
+```{r echo=FALSE}
+ggplot(data = clean.full.calc, aes(x = pH_treatment, y = umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), fill = as.factor(temp_treatment))) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+       text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Calcification~rate~(μmol~CO[3]~g^-1~hr^-1)))
+```
+
+### 2nd order polynomial?
+```{r}
+#polynomial ancova
+  clean.full.calc$temp_treatment <-as.factor(clean.full.calc$temp_treatment)
+  clean.full.calc$experiment <- as.factor (clean.full.calc$experiment)
+  calcpoly <- lm(umol.cm2.hr ~ poly(pH_treatment,2) * temp_treatment, data = clean.full.calc)
+  #plot(calcpoly)
+  anova(calcpoly)
+
+  #with effect for experiment
+  calcpolyrando <-lm(umol.cm2.hr ~ poly(pH_treatment,2) * temp_treatment + experiment, data = clean.full.calc)
+  anova(calcpolyrando)
+
+  AIC(calcpoly)
+  AIC(calcpolyrando)
+
+clean.full.calc <- clean.full.calc %>%
+  mutate(model = predict(calcpoly)) #model prediction for plot
+```
+
+```{r echo=FALSE}
+## try plotting 
+ggplot(data = clean.full.calc, aes(x = pH_treatment, y = umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), fill = as.factor(temp_treatment))) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+       text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Calcification~rate~(μmol~CaCO[3]~g^-1~hr^-1)))
+```
+
+### Gaussian?
+```{r}
+#polynomial ancova
+  calc_g_reduced <- glm(umol.cm2.hr ~ pH_treatment * temp_treatment, family = "gaussian", data = clean.full.calc)
+  #plot(calcpoly)
+  anova(calc_g_reduced)
+
+  #with effect for experiment
+  calc_g_full <-lm(umol.cm2.hr ~ pH_treatment * temp_treatment + experiment, family = "gaussian", data = clean.full.calc)
+  anova(calc_g_full)
+
+  AIC(calc_g_reduced)
+  AIC(calc_g_full)
+
+clean.full.calc <- clean.full.calc %>%
+  mutate(model = predict(calc_g_reduced)) #model prediction for plot
+```
+
+```{r echo=FALSE}
+## try plotting 
+ggplot(data = clean.full.calc, aes(x = pH_treatment, y = umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), fill = as.factor(temp_treatment))) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+       text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Calcification~rate~(μmol~CaCO[3]~g^-1~hr^-1)))
+```
+
+### Model selection
+```{r}
+AIC(calcpoly)
+AIC(calclin_reduced)
+AIC(calc_g_reduced)
+```
+
+## Normalized to dry shell weight
+```{r}
+clean.full.calc$umol.cm2.hr<-((clean.full.calc$deltaTA/2)*(1.025)*(clean.full.calc$volume))/((clean.full.calc$dry_shell_weight)*(clean.full.calc$timediff))
+```
+
+
+### Linear?
+```{r}
+#Linear ancova
+  calclin_reduced <- lm(umol.cm2.hr ~ pH_treatment * temp_treatment, data = clean.full.calc)
+  #plot(calcpoly)
+  anova(calclin_reduced)
+
+  #with with effect for experiment
+  calclin_full <-lm(umol.cm2.hr ~ pH_treatment * temp_treatment + experiment, data = clean.full.calc)
+  anova(calclin_full)
+
+  AIC(calclin_full)
+  AIC(calclin_reduced) #lower
+
+clean.full.calc <- clean.full.calc %>%
+  mutate(model = predict(calclin_reduced)) #model prediction for plot
+```
+
+```{r echo=FALSE}
+ggplot(data = clean.full.calc, aes(x = pH_treatment, y = umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), fill = as.factor(temp_treatment))) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+       text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Calcification~rate~(μmol~CaCO[3]~g^-1~hr^-1)))
+```
+
+### 2nd order polynomial?
+```{r}
+#polynomial ancova
+  clean.full.calc$temp_treatment <-as.factor(clean.full.calc$temp_treatment)
+  clean.full.calc$experiment <- as.factor (clean.full.calc$experiment)
+  calcpoly <- lm(umol.cm2.hr ~ poly(pH_treatment,2) * temp_treatment, data = clean.full.calc)
+  #plot(calcpoly)
+  anova(calcpoly)
+
+  #with effect for experiment
+  calcpolyrando <-lm(umol.cm2.hr ~ poly(pH_treatment,2) * temp_treatment + experiment, data = clean.full.calc)
+  anova(calcpolyrando)
+
+  AIC(calcpoly)
+  AIC(calcpolyrando)
+
+clean.full.calc <- clean.full.calc %>%
+  mutate(model = predict(calcpoly)) #model prediction for plot
+```
+
+```{r echo=FALSE}
+## try plotting 
+ggplot(data = clean.full.calc, aes(x = pH_treatment, y = umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), fill = as.factor(temp_treatment))) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+       text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Calcification~rate~(μmol~CaCO[3]~g^-1~hr^-1)))
+```
+
+### Gaussian?
+```{r}
+#polynomial ancova
+  calc_g_reduced <- glm(umol.cm2.hr ~ pH_treatment * temp_treatment, family = "gaussian", data = clean.full.calc)
+  #plot(calcpoly)
+  anova(calc_g_reduced)
+
+  #with effect for experiment
+  calc_g_full <-lm(umol.cm2.hr ~ pH_treatment * temp_treatment + experiment, family = "gaussian", data = clean.full.calc)
+  anova(calc_g_full)
+
+  AIC(calc_g_reduced)
+  AIC(calc_g_full)
+
+clean.full.calc <- clean.full.calc %>%
+  mutate(model = predict(calc_g_reduced)) #model prediction for plot
+```
+
+```{r echo=FALSE}
+## try plotting 
+ggplot(data = clean.full.calc, aes(x = pH_treatment, y = umol.cm2.hr, group = interaction(pH_treatment, temp_treatment), fill = as.factor(temp_treatment))) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment, color = as.factor(temp_treatment))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+       text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Calcification~rate~(μmol~CaCO[3]~g^-1~hr^-1)))
+```
+
+### Model selection
+```{r}
+AIC(calcpoly)
+AIC(calclin_reduced)
+AIC(calc_g_reduced)
+```

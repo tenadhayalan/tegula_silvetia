@@ -1,0 +1,207 @@
+---
+title: "10.16.meeting"
+author: "Tena Dhayalan"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: cosmo
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+  
+```{r,echo=FALSE, message=FALSE}
+library(dplyr)
+library(broom)
+library(purrr)
+library(lubridate)
+library(tidyverse)
+library(nlstools)
+library(here)
+library(stringr)
+library(lmerTest)
+library(lme4)
+library(knitr)
+require(kableExtra)
+library(tidyverse)
+options(knitr.table.format = "html")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,    # Show warnings
+  message = FALSE,    # Show messages
+  error = FALSE       # Show errors
+)
+```
+
+# Load datasets 
+```{r, echo = FALSE}
+respo <- read_csv(here("Data","PR_2024","Metadata_combined.csv"))
+respo <- respo %>%
+  filter(Species == "Tegula")
+RWrespo <- respo %>%
+  filter(Species == "Rockweed")
+calc <- read_csv(here("Data", "TA", "Calcification_clean.csv"))
+maypH <- read_csv(here("Data","pH_temp","ph_temp_may_final.csv"))
+aprilpH <- read_csv(here("Data","pH_temp","ph_temp_final_cut.csv"))
+aprilTeg <- read_csv(here("Data","growth","tegula_initial_april.csv"))
+mayTeg <- read_csv(here("Data","growth","tegula_initial_may.csv"))
+Respo.R <- read_csv(here("Data","PR_2024","Respo_final.csv"))
+Sample.Info <- read_csv(file = here("Data","PR_2024","Metadata_combined.csv"))
+respo_clean <-read.csv(here("Data", "PR_2024","PR_final_normalized_clean.csv"))
+respo_dry_clean <- read.csv(here("Data", "PR_2024","PR_final_normalized_dry_clean.csv"))
+```
+
+
+```{r, echo=FALSE}
+### REAL PH AND TEMP
+# calculating april REAL avgs for pH and temp
+aprilPHavg <- aggregate(cbind(pH,TempInSitu) ~ tank, data = aprilpH, FUN = mean)
+aprilPHavg$tank <- as.character(aprilPHavg$tank)
+
+# calculating may REAL avgs for pH and temp
+mayPHavg <- aggregate(cbind(pH,TempInSitu) ~ tank, data = maypH, FUN = mean)
+mayPHavg$tank <- as.character(mayPHavg$tank)
+```
+
+```{r, echo=FALSE}
+## ADDED PH AND TEMP
+Sample.Info.April <-
+  Sample.Info %>%
+  filter(experiment == "a") %>%
+  left_join(aprilPHavg, by = "tank")
+
+Sample.Info.May <-
+  Sample.Info %>%
+  filter(experiment == "b") %>%
+  left_join(mayPHavg, by = "tank")
+
+Sample.Info.New <- rbind(Sample.Info.April,Sample.Info.May)
+
+Sample.Info.New$BLANK <- as.factor(Sample.Info.New$BLANK)
+Sample.Info.New$ID <- as.factor(Sample.Info.New$ID)
+Sample.Info.New$dry_weight <- as.numeric(Sample.Info.New$dry_weight)
+```
+
+
+```{r, echo=FALSE}
+## RESPO DATA
+respo_dry_clean$ID <- as.factor(respo_dry_clean$ID)
+```
+
+# Tegula
+
+Initial size vs respo plot, separated by experiment
+```{r echo=FALSE}
+tegrespodry <- respo_dry_clean %>%
+  filter(Species == "Tegula") %>% #filter out rockweeds
+  mutate(ID = as.factor(ID))
+
+Teg.Sample.Info.New <- Sample.Info.New %>%
+  filter(Species == "Tegula", BLANK == "0") #filter out rockweeds and blankies
+
+tegrespodry <- tegrespodry %>%
+  left_join(Teg.Sample.Info.New, by = c("block","ID","Species")) #bring in sample info
+
+tegrespodry$initial_wet_weight.x <- as.numeric(tegrespodry$initial_wet_weight.x) #making a number
+lmtegsizewtf <- lmer(Respiration ~ initial_wet_weight.x * (1|experiment.x), data = tegrespodry) #rando lm
+tegrespodry <- tegrespodry %>%
+  mutate(model = predict(lmtegsizewtf)) #adding model prediction for plot
+summary(lmtegsizewtf) #look at that model go
+
+#graph
+tegrespodry %>%
+  ggplot(aes(x=initial_wet_weight.x, y=Respiration))+
+  #geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
+  stat_summary(aes(color = as.factor(temp_treatment.x)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  geom_line(aes(y = model, group = temp_treatment.x, color = as.factor(temp_treatment.x))) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4"))+ 
+  scale_y_continuous(limits = c(0,100))+
+  scale_x_continuous(limits = c(1,3))+
+  labs(x = expression(Initial~Wet~Weight~(g)),
+      color = "Temperature",
+      fill = "Temperature",
+      y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
+```
+
+Respo by treatment separated by experiment
+```{r echo=FALSE}
+tegrespodry <- respo_dry_clean %>%
+  filter(Species == "Tegula") %>% #filter out rockweeds
+  mutate(ID = as.factor(ID))
+
+Teg.Sample.Info.New <- Sample.Info.New %>%
+  filter(Species == "Tegula", BLANK == "0") #filter out rockweeds and blankies
+
+tegrespodry <- tegrespodry %>%
+  left_join(Teg.Sample.Info.New, by = c("block","ID","Species")) #bring in sample info
+
+tegrespodry %>%
+  ggplot(aes(x=pH, y=Respiration, fill=as.factor(temp_treatment.x)))+
+  facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
+  #geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment.x)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
+
+```
+
+## So, let's add experiment AND initial size to our model
+```{r}
+tegmodel_big <- lmer(Respiration ~ pH_treatment.x * temp_treatment.x * initial_wet_weight.x * (1| experiment.x), data=tegrespodry)
+plot(tegmodel_big) #check assumptions
+anova(tegmodel_big)
+
+tegmodel_mid <- lmer(Respiration ~ pH_treatment.x * temp_treatment.x + initial_wet_weight.x + (1| experiment.x), data=tegrespodry)
+plot(tegmodel_mid) #check assumptions
+anova(tegmodel_mid)
+```
+
+
+# Rockweed
+
+```{r, echo=FALSE}
+rwrespo <- respo_dry_clean %>%
+  filter(Species == "Rockweed", Respiration != 0) ##filter out snails
+
+
+RW.Sample.Info.New <- Sample.Info.New %>%
+  filter(Species == "Rockweed", BLANK == "0") #filter out snails
+
+rwrespo <- rwrespo %>%
+  left_join(RW.Sample.Info.New, by = c("block","ID","Species")) #bring in sample info
+
+rwrespo <- rwrespo[-36,]
+rwrespo <- rwrespo[-35,]
+
+rwrespo %>%
+  ggplot(aes(x=pH, y=Respiration, fill=as.factor(temp_treatment.x)))+
+  #facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
+  #geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
+  stat_summary(aes(color = as.factor(temp_treatment.x)), fun.data = mean_se, fun.args = list(mult = 1), 
+               geom = "pointrange", size = 0.5) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
+```

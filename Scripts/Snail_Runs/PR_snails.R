@@ -132,10 +132,11 @@ write_csv(Respo.R, here("Data",
 
 Respo.R <- read_csv(here("Data",
                          "PR_2024",
-                         "Respo_final_clean_avg.csv"))  
+                         "Respo_final.csv"))  
 
 # Calculate Respiration rate
 
+Sample.Info$BLANK <- as.factor(Sample.Info$BLANK)
 Respo.R<-Respo.R %>%
   left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
   drop_na(FileName) %>% # drop NAs
@@ -151,32 +152,42 @@ Respo.R<-Respo.R %>%
 
 #View(Respo.R)
 
-Respo.R_Normalized <- Respo.R %>%
-  group_by(block, pH_treatment, Light_Dark, Species, BLANK)%>% # also add block here if one blank per block #add light dark for rockweed
-  summarise(umol.sec = mean(umol.sec, na.rm=TRUE)) %>%
-  filter(BLANK ==1)%>% # only keep the actual blanks
-  dplyr::select(block, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>% # only keep what we need and rename the blank rate column
-  right_join(Respo.R, by = c("block", "pH_treatment", "Light_Dark", "Species")) %>% # join with the respo data %>%
-  mutate(umol.sec.corr = umol.sec - blank.rate, # subtract the blank rates from the raw rates
-         umol.gram.hr = (umol.sec.corr*3600)/wet_weight)  %>% # convert to umol g hr-1 #REPLACED WET WEIGHT
-  filter(BLANK ==0) %>% # remove all the blank data
-  dplyr::select(Date, Species, pH_treatment, temp_treatment, Light_Dark, ID, wet_weight, umol.gram.hr) #keep only what we need #REPLACED WITH WET WEIGHT
+# Step 1: Normalize respiration data
+Respo.R.Normalized <- Respo.R %>%
+  group_by(block, pH_treatment, Light_Dark, Species, BLANK) %>%
+  summarise(umol.sec = mean(umol.sec, na.rm = TRUE), .groups = 'drop') %>%
+  filter(BLANK == 1) %>%
+  dplyr::select(block, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>%
+  right_join(Respo.R, by = c("block", "pH_treatment", "Light_Dark", "Species")) %>%
+  mutate(
+    dry_weight = as.numeric(as.character(dry_weight)), # Convert to numeric
+    umol.sec.corr = umol.sec - blank.rate,
+    umol.gram.hr = ((umol.sec.corr * 3600) / dry_weight)) %>%
+  filter(BLANK == 0)
 
-#View(Respo.R_Normalized)
-
-# pivot the data so that light and dark have their own column for net P and R
-Respo.R_Normalized<- Respo.R_Normalized %>%
-  dplyr::select(!Date) %>%
-  pivot_wider(names_from = Light_Dark, values_from = umol.gram.hr) %>%
-  rename(Respiration = Dark)%>% 
-         # NetPhoto = Light) %>% # rename the columns
-  mutate(Respiration = - Respiration # Make respiration positive
-        # GrossPhoto = Respiration + NetPhoto
+# Step 2: Pivot the data for Light and Dark
+Respo.R_Normalized <- Respo.R.Normalized %>%
+  filter(!is.na(umol.gram.hr)) %>% # Ensure `umol.gram.hr` is present
+  dplyr::select(-Date) %>% # Remove Date column if it's not needed for pivoting
+  pivot_wider(
+    names_from = Light_Dark,
+    values_from = umol.gram.hr,
+    values_fill = 0 # Fill missing values with 0 if needed
+  ) %>%
+  rename(
+    Respiration = Dark # Rename Dark to Respiration
+    # Uncomment the line below if you want to rename 'Light' to 'NetPhoto'
+    # NetPhoto = Light  
+  ) %>%
+  mutate(
+    Respiration = -Respiration # Make respiration positive by negating it
+    # Uncomment the line below if you want to calculate GrossPhotosynthesis
+    # GrossPhoto = Respiration + NetPhoto
   )
 
 write_csv(Respo.R_Normalized,here("Data",
                                   "PR_2024",
-                                  "PR_final_normalized_clean.csv"))# export all the uptake rates
+                                  "PR_final_normalized_dry_clean.csv"))# export all the uptake rates
 
 #####------plot------####
 
