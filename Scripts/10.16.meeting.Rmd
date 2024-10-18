@@ -35,13 +35,11 @@ knitr::opts_chunk$set(
 )
 ```
 
-# Load datasets 
 ```{r, echo = FALSE}
+#Load datasets
 respo <- read_csv(here("Data","PR_2024","Metadata_combined.csv"))
 respo <- respo %>%
   filter(Species == "Tegula")
-RWrespo <- respo %>%
-  filter(Species == "Rockweed")
 calc <- read_csv(here("Data", "TA", "Calcification_clean.csv"))
 maypH <- read_csv(here("Data","pH_temp","ph_temp_may_final.csv"))
 aprilpH <- read_csv(here("Data","pH_temp","ph_temp_final_cut.csv"))
@@ -53,8 +51,13 @@ respo_clean <-read.csv(here("Data", "PR_2024","PR_final_normalized_clean.csv"))
 respo_dry_clean <- read.csv(here("Data", "PR_2024","PR_final_normalized_dry_clean.csv"))
 ```
 
+```{r}
+#making tank unique per experiment
+Sample.Info <- Sample.Info %>%
+  mutate(tank_exp = paste(tank, experiment))
+```
 
-```{r, echo=FALSE}
+```{r}
 ### REAL PH AND TEMP
 # calculating april REAL avgs for pH and temp
 aprilPHavg <- aggregate(cbind(pH,TempInSitu) ~ tank, data = aprilpH, FUN = mean)
@@ -92,7 +95,7 @@ respo_dry_clean$ID <- as.factor(respo_dry_clean$ID)
 
 # Tegula
 
-Initial size vs respo plot, separated by experiment
+Initial size vs respo plot
 ```{r echo=FALSE}
 tegrespodry <- respo_dry_clean %>%
   filter(Species == "Tegula") %>% #filter out rockweeds
@@ -105,7 +108,7 @@ tegrespodry <- tegrespodry %>%
   left_join(Teg.Sample.Info.New, by = c("block","ID","Species")) #bring in sample info
 
 tegrespodry$initial_wet_weight.x <- as.numeric(tegrespodry$initial_wet_weight.x) #making a number
-lmtegsizewtf <- lmer(Respiration ~ initial_wet_weight.x * (1|experiment.x), data = tegrespodry) #rando lm
+lmtegsizewtf <- lm(Respiration ~ initial_wet_weight.x, data = tegrespodry) #predicting respo from weight
 tegrespodry <- tegrespodry %>%
   mutate(model = predict(lmtegsizewtf)) #adding model prediction for plot
 summary(lmtegsizewtf) #look at that model go
@@ -113,11 +116,9 @@ summary(lmtegsizewtf) #look at that model go
 #graph
 tegrespodry %>%
   ggplot(aes(x=initial_wet_weight.x, y=Respiration))+
-  #geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
-  facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
   stat_summary(aes(color = as.factor(temp_treatment.x)), fun.data = mean_se, fun.args = list(mult = 1), 
                geom = "pointrange", size = 0.5) +
-  geom_line(aes(y = model, group = temp_treatment.x, color = as.factor(temp_treatment.x))) +
+  geom_line(aes(y = model)) +
   theme_bw() +
   theme(strip.background = element_rect(fill = "white"),
         text = element_text(size = 14)) +
@@ -132,7 +133,7 @@ tegrespodry %>%
 ```
 
 Respo by treatment separated by experiment
-```{r echo=FALSE}
+```{r}
 tegrespodry <- respo_dry_clean %>%
   filter(Species == "Tegula") %>% #filter out rockweeds
   mutate(ID = as.factor(ID))
@@ -144,11 +145,10 @@ tegrespodry <- tegrespodry %>%
   left_join(Teg.Sample.Info.New, by = c("block","ID","Species")) #bring in sample info
 
 tegrespodry %>%
-  ggplot(aes(x=pH, y=Respiration, fill=as.factor(temp_treatment.x)))+
+  ggplot(aes(x=pH, y=Respiration, color = as.factor(temp_treatment.x),fill=as.factor(temp_treatment.x)))+
   facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
-  #geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
-  stat_summary(aes(color = as.factor(temp_treatment.x)), fun.data = mean_se, fun.args = list(mult = 1), 
-               geom = "pointrange", size = 0.5) +
+  geom_jitter()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
   theme_bw() +
   theme(strip.background = element_rect(fill = "white"),
         text = element_text(size = 14)) +
@@ -160,21 +160,22 @@ tegrespodry %>%
        y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
 
 ```
+Upwelling index in March lower than in April, so temp diff makes sense methinks
 
-## So, let's add experiment AND initial size to our model
-```{r}
-tegmodel_big <- lmer(Respiration ~ pH_treatment.x * temp_treatment.x * initial_wet_weight.x * (1| experiment.x), data=tegrespodry)
-plot(tegmodel_big) #check assumptions
-anova(tegmodel_big)
+## Okay, what if we control for initial weight
+```{r, echo = FALSE}
+tegmodel_weight <- lm(Respiration ~ initial_wet_weight.x, data = tegrespodry) # predicting resp from initial weight
+#plot(tegmodel_weight)
+tegrespodry$residuals <- residuals(tegmodel_weight) #take residuals from weight prediction
+tegmodel_res <- lmer(residuals ~ poly(pH,2) * temp_treatment.x * experiment.x + (1| tank_exp), data=tegrespodry)
+#plot(tegmodel_res)
+anova(tegmodel_res) #model stats, temp and experiment significant
 
-tegmodel_mid <- lmer(Respiration ~ pH_treatment.x * temp_treatment.x + initial_wet_weight.x + (1| experiment.x), data=tegrespodry)
-plot(tegmodel_mid) #check assumptions
-anova(tegmodel_mid)
 ```
 
+# April Rockweed
 
-# Rockweed
-
+## Respo
 ```{r, echo=FALSE}
 rwrespo <- respo_dry_clean %>%
   filter(Species == "Rockweed", Respiration != 0) ##filter out snails
@@ -189,19 +190,81 @@ rwrespo <- rwrespo %>%
 rwrespo <- rwrespo[-36,]
 rwrespo <- rwrespo[-35,]
 
-rwrespo %>%
-  ggplot(aes(x=pH, y=Respiration, fill=as.factor(temp_treatment.x)))+
-  #facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
-  #geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 0.8, alpha = 0.3) +
-  stat_summary(aes(color = as.factor(temp_treatment.x)), fun.data = mean_se, fun.args = list(mult = 1), 
-               geom = "pointrange", size = 0.5) +
-  theme_bw() +
-  theme(strip.background = element_rect(fill = "white"),
-        text = element_text(size = 14)) +
+rwrespo_clean <- rwrespo %>%
+    filter(!is.na(Respiration) & !is.nan(Respiration) & !is.infinite(Respiration))
+
+#Respiration
+rwmodelR <- lmer(Respiration ~ poly(pH,2) * temp_treatment.x  + (1| tank_exp), data=rwrespo_clean)
+#plot(rwmodelR)
+anova(rwmodelR) #model stats, temp sig
+rwrespo_clean <- rwrespo_clean %>%
+  mutate(model = predict(rwmodelR)) #add model prediction to df
+
+rwrespo_clean %>%
+   ggplot(aes(x = pH, y = Respiration, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
+  facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
+  theme_bw()+
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  ) +
   scale_fill_manual(values = c("salmon", "salmon4")) +
   scale_color_manual(values = c("salmon", "salmon4")) +
-  labs(x = expression(pH[T]),
-       color = "Temperature",
-       fill = "Temperature",
-       y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
+    labs(
+    x = expression(pH[T]),
+    color = "Temperature",
+    fill = "Temperature",
+    y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1))
+  )
+
+#Net Photosynthesis
+rwmodelNP <- lmer(NetPhoto ~ poly(pH,2) * temp_treatment.x  + (1| tank_exp), data=rwrespo_clean)
+#plot(rwmodelNP)
+anova(rwmodelNP) #model stats, temp sig
+#rwrespo <- rwrespo %>%
+ # mutate(model = predict(rwmodelNP)) #add model prediction to df
+
+rwrespo %>%
+   ggplot(aes(x = pH, y = NetPhoto, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
+  facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
+  theme_bw()+
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  ) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+    labs(
+    x = expression(pH[T]),
+    color = "Temperature",
+    fill = "Temperature",
+    y = expression(Net~Photosynthetic~rate~(mu*mol~O[2]~g^-1~hr^-1))
+  )
+
+#Gross Photosynthesis
+rwmodelGP <- lmer(GrossPhoto ~ poly(pH,2) * temp_treatment.x  + (1| tank_exp), data=rwrespo_clean)
+#plot(rwmodelGP)
+anova(rwmodelGP) #model stats, temp sig
+#rwrespo <- rwrespo %>%
+#  mutate(model = predict(rwmodelGP)) #add model prediction to df
+
+rwrespo %>%
+   ggplot(aes(x = pH, y = GrossPhoto, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
+  facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
+  theme_bw()+
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  ) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+    labs(
+    x = expression(pH[T]),
+    color = "Temperature",
+    fill = "Temperature",
+    y = expression(Gross~Photosynthetic~rate~(mu*mol~O[2]~g^-1~hr^-1))
+  )
 ```

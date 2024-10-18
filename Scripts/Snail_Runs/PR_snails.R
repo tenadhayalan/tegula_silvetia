@@ -129,7 +129,9 @@ write_csv(Respo.R, here("Data",
                         "PR_2024",
                         "Respo_final.csv"))  
 ####----after loop----####
-
+Sample.Info <- read_csv(file = here("Data",
+                                    "PR_2024",
+                                    "Metadata_combined.csv"))
 Respo.R <- read_csv(here("Data",
                          "PR_2024",
                          "Respo_final.csv"))  
@@ -172,17 +174,37 @@ Respo.R_Normalized <- Respo.R.Normalized %>%
   pivot_wider(
     names_from = Light_Dark,
     values_from = umol.gram.hr,
-    values_fill = 0 # Fill missing values with 0 if needed
   ) %>%
   rename(
-    Respiration = Dark # Rename Dark to Respiration
+    Respiration = Dark, # Rename Dark to Respiration
     # Uncomment the line below if you want to rename 'Light' to 'NetPhoto'
-    # NetPhoto = Light  
-  ) %>%
+    NetPhoto = Light  
+  )
+
+# Step 1: Summarize Respiration and NetPhoto values by SampleID
+combined_values <- Respo.R_Normalized %>%
+  group_by(Species,ID) %>% # Replace SampleID with your actual sample ID column name
+  summarise(
+    Respiration = sum(Respiration, na.rm = TRUE), # Summing Respiration values
+    NetPhoto = sum(NetPhoto, na.rm = TRUE), # Summing NetPhoto values
+    .groups = 'drop' # Optional: to ungroup after summarizing
+  )
+
+# Step 2: Join the combined values back to the original dataset
+Respo.R_Normalized <- Respo.R_Normalized %>%
+  left_join(combined_values, by = c("Species","ID")) # Replace SampleID with your actual sample ID column name
+
+# Optional: If you want to keep only one set of Respiration and NetPhoto columns, you can do:
+Respo.R_Normalized <- Respo.R_Normalized %>%
   mutate(
-    Respiration = -Respiration # Make respiration positive by negating it
-    # Uncomment the line below if you want to calculate GrossPhotosynthesis
-    # GrossPhoto = Respiration + NetPhoto
+    Respiration = ifelse(!is.na(Respiration.x), Respiration.x, Respiration.y), # Choose non-NA value
+    NetPhoto = ifelse(!is.na(NetPhoto.x), NetPhoto.x, NetPhoto.y) # Choose non-NA value
+  ) %>%
+  select(-Respiration.x, -Respiration.y, -NetPhoto.x, -NetPhoto.y) # Remove duplicate columns
+
+Respo.R_Normalized <- Respo.R_Normalized %>%  
+  mutate(Respiration = -Respiration,# Make respiration positive by negating it
+  GrossPhoto = ifelse(!is.na(Respiration) & !is.na(NetPhoto), Respiration + NetPhoto, NA)
   )
 
 write_csv(Respo.R_Normalized,here("Data",
