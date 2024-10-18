@@ -202,6 +202,7 @@ rwrespo_clean <- rwrespo_clean %>%
 
 rwrespo_clean %>%
    ggplot(aes(x = pH, y = Respiration, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
+  geom_jitter()+
   facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
   geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
   theme_bw()+
@@ -228,6 +229,7 @@ anova(rwmodelNP) #model stats, temp sig
 rwrespo %>%
    ggplot(aes(x = pH, y = NetPhoto, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
   facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
+  geom_jitter()+
   geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
   theme_bw()+
   theme(
@@ -252,6 +254,7 @@ anova(rwmodelGP) #model stats, temp sig
 
 rwrespo %>%
    ggplot(aes(x = pH, y = GrossPhoto, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
+  geom_jitter()+
   facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
   geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
   theme_bw()+
