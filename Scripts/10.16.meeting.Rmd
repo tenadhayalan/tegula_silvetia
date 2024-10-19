@@ -187,11 +187,10 @@ RW.Sample.Info.New <- Sample.Info.New %>%
 rwrespo <- rwrespo %>%
   left_join(RW.Sample.Info.New, by = c("block","ID","Species")) #bring in sample info
 
-rwrespo <- rwrespo[-36,]
-rwrespo <- rwrespo[-35,]
-
 rwrespo_clean <- rwrespo %>%
     filter(!is.na(Respiration) & !is.nan(Respiration) & !is.infinite(Respiration))
+
+rwrespo_clean <- rwrespo_clean %>% filter(Respiration <= 80, NetPhoto > 0)
 
 #Respiration
 rwmodelR <- lmer(Respiration ~ poly(pH,2) * temp_treatment.x  + (1| tank_exp), data=rwrespo_clean)
