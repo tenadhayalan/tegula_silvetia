@@ -171,6 +171,21 @@ tegmodel_res <- lmer(residuals ~ poly(pH,2) * temp_treatment.x * experiment.x + 
 #plot(tegmodel_res)
 anova(tegmodel_res) #model stats, temp and experiment significant
 
+tegrespodry %>%
+  ggplot(aes(x=pH, y=residuals, color = as.factor(temp_treatment.x),fill=as.factor(temp_treatment.x)))+
+  facet_wrap(~experiment.x,labeller = as_labeller(c("a" = "April", "b" = "May")))+
+  geom_jitter()+
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Residuals))
+
 ```
 
 # April Rockweed
