@@ -163,7 +163,7 @@ tegrespodry %>%
 Upwelling index in March lower than in April, so temp diff makes sense methinks
 
 ## Okay, what if we control for initial weight
-```{r, echo = FALSE}
+```{r}
 tegmodel_weight <- lm(Respiration ~ initial_wet_weight.x, data = tegrespodry) # predicting resp from initial weight
 #plot(tegmodel_weight)
 tegrespodry$residuals <- residuals(tegmodel_weight) #take residuals from weight prediction
@@ -240,7 +240,7 @@ anova(rwmodelNP) #model stats, temp sig
 #rwrespo <- rwrespo %>%
  # mutate(model = predict(rwmodelNP)) #add model prediction to df
 
-rwrespo %>%
+rwrespo_clean %>%
    ggplot(aes(x = pH, y = NetPhoto, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
   facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
   geom_jitter()+
@@ -266,7 +266,7 @@ anova(rwmodelGP) #model stats, temp sig
 #rwrespo <- rwrespo %>%
 #  mutate(model = predict(rwmodelGP)) #add model prediction to df
 
-rwrespo %>%
+rwrespo_clean %>%
    ggplot(aes(x = pH, y = GrossPhoto, color = as.factor(temp_treatment.x), fill = as.factor(temp_treatment.x))) +
   geom_jitter()+
   facet_wrap(~experiment.x, labeller = as_labeller(c("a" = "April", "b" = "May"))) +
