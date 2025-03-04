@@ -8,7 +8,7 @@ library(here)
 library(janitor)
 
 ####-----load data------####
-predation <- read_csv(here("Data","growth","rockweed_weights_may1.csv"))
+predation <- read_csv(here("Data","growth","rockweed_weights_may.csv"))
 
 
 ####-----calculating percent weight change------####

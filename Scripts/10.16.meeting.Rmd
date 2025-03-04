@@ -50,6 +50,7 @@ Respo.R <- read_csv(here("Data","PR_2024","Respo_final.csv"))
 Sample.Info <- read_csv(file = here("Data","PR_2024","Metadata_combined.csv"))
 respo_clean <-read.csv(here("Data", "PR_2024","PR_final_normalized_clean.csv"))
 respo_dry_clean <- read.csv(here("Data", "PR_2024","PR_final_normalized_dry_clean.csv"))
+cn <- read.csv(here("Data", "CN ratio","cn_exp1.csv"))
 ```
 
 ```{r}
@@ -155,6 +156,28 @@ tegrespodry %>%
       color = "Temperature",
       fill = "Temperature",
       y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
+```
+
+## Growth
+
+### Condition Index for Teg
+```{r}
+Sample.Info.New$CI <- Sample.Info.New$dry_weight/Sample.Info.New$dry_shell_weight*100
+
+Sample.Info.New %>%
+  ggplot(aes(x=pH, y=CI, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
+  facet_wrap(~experiment,labeller = as_labeller(c("a" = "April", "b" = "May")))+
+  geom_jitter(alpha = 0.5)+
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(x = expression(pH[T]),
+       color = "Temperature",
+       fill = "Temperature",
+       y = expression(Condition~Index))
 ```
 
 ## Calcification
@@ -467,3 +490,81 @@ cuti %>%
 
 ```
 
+### C:N Ratio
+```{r}
+cn <- cn %>%
+  left_join(aprilpH %>% filter(date == 20240402) %>% select(tank, expected_pH, expected_temp), by = "tank")
+
+cn<-cn %>%
+  mutate(weight_ug = weight_mg*1000, # convert weight to micrograms
+         N_percent = n_ug/weight_ug*100, # calculate N percent
+         C_percent = c_ug/weight_ug*100, # calculate C percent
+         C_N = c_ug/n_ug)
+cn %>%
+ggplot(aes(x = expected_pH, y = C_N, color = as.factor(expected_temp), fill = as.factor(expected_temp))) +
+  geom_jitter(alpha=0.5)+
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw()+
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  ) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+    labs(
+    x = expression(pH[T]),
+    color = "Temperature",
+    fill = "Temperature",
+    y = expression(C:N)
+  )
+
+cnmodel <- lm(C_N ~ expected_pH * expected_temp, data=cn)
+anova(cnmodel)
+```
+
+### C13
+```{r}
+cn %>%
+ggplot(aes(x = expected_pH, y = c13, color = as.factor(expected_temp), fill = as.factor(expected_temp))) +
+  geom_jitter(alpha=0.5)+
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw()+
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  ) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+    labs(
+    x = expression(pH[T]),
+    color = "Temperature",
+    fill = "Temperature",
+    y = expression(C:N)
+    )
+cmodel <- lm(c13 ~ expected_pH * expected_temp, data=cn)
+anova(cmodel)
+```
+
+###N15
+```{r}
+cn %>%
+ggplot(aes(x = expected_pH, y = n15, color = as.factor(expected_temp), fill = as.factor(expected_temp))) +
+  geom_jitter(alpha=0.5)+
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw()+
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  ) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+    labs(
+    x = expression(pH[T]),
+    color = "Temperature",
+    fill = "Temperature",
+    y = expression(C:N)
+    )
+
+nmodel <- lm(n15 ~ expected_pH * expected_temp, data=cn)
+anova(nmodel)
+```

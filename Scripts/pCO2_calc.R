@@ -1,6 +1,6 @@
-## process pH for Orion
-# Created by Nyssa Silbiger
-# Edited on 07/27/2021
+## Calculate pCO2 using pH and TA
+# Created by Tena Dhayalan
+# Edited on 02/22/2025
 library(tidyverse)
 library(seacarb)
 library(broom)
@@ -12,22 +12,35 @@ library(interactions)
 library(sandwich)
 library(patchwork)
 
-## bring in pH calibration files and raw data files
+## bring in pH and TA data
 
-TrisCalibrationLog<- read.csv("Data/pH_temp/tris_cal_may.csv")
+april <- read.csv("Data/TA/April_background_TA.csv")
+may <- read.csv("Data/TA/May_background_TA.csv")
 
-pHcalib<-TrisCalibrationLog %>%
-  mutate(TrisCalDate = ymd(date))
+# april
+aprilcarb <- carb(8, var1 = april$pH, var2 = april$TA, S = april$Salinity_lab, T = april$TempInSitu, pHscale = "T")
 
+april <- april %>%
+  left_join(aprilcarb)
 
-pHData<-read.csv("Data/TA/May_background_TA.csv")
-pHData<-pHData%>%
-  mutate(TrisCalDate = ymd(TrisCalDate),
-         Sampling_Date = ymd(date))
+april %>%
+  ggplot(aes(x = SampleID, y = pCO2, group = SampleID)) +
+  geom_boxplot()
 
-# Needed for phosphate data
+write.csv(april, "Data/pH_temp/april_carb.csv")
 
+# may
+maycarb <- carb(8, var1 = may$pH, var2 = may$TA, S = may$Salinity_lab, T = may$TempInSitu, pHscale = "T")
 
+may <- may %>%
+  left_join(maycarb)
+
+may %>%
+  ggplot(aes(x = SampleID, y = pCO2, group = SampleID)) +
+  geom_boxplot()
+
+write.csv(may, "Data/pH_temp/may_carb.csv")
+  
 ## take the mV calibration files by each date and use them to calculate pH
 pHSlope<-pHcalib %>%
   # extract only the orion data
@@ -44,4 +57,4 @@ pHSlope<-pHcalib %>%
 
 view(pHSlope)
 
-write.csv(pHSlope, "Data/TA/May_background_TA.csv")
+write.csv(pHSlope, "Data/pH_temp/ph_temp_may_final.csv")

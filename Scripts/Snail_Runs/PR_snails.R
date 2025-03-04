@@ -134,7 +134,7 @@ Sample.Info <- read_csv(file = here("Data",
                                     "Metadata_combined.csv"))
 Respo.R <- read_csv(here("Data",
                          "PR_2024",
-                         "Respo_final.csv"))  
+                         "Respo_final_clean_avg.csv"))  
 
 # Calculate Respiration rate
 
@@ -183,7 +183,7 @@ Respo.R_Normalized <- Respo.R.Normalized %>%
 
 # Step 1: Summarize Respiration and NetPhoto values by SampleID
 combined_values <- Respo.R_Normalized %>%
-  group_by(Species,ID) %>% # Replace SampleID with your actual sample ID column name
+  group_by(Species,ID,experiment) %>% # Replace SampleID with your actual sample ID column name
   summarise(
     Respiration = sum(Respiration, na.rm = TRUE), # Summing Respiration values
     NetPhoto = sum(NetPhoto, na.rm = TRUE), # Summing NetPhoto values
@@ -192,15 +192,16 @@ combined_values <- Respo.R_Normalized %>%
 
 # Step 2: Join the combined values back to the original dataset
 Respo.R_Normalized <- Respo.R_Normalized %>%
-  left_join(combined_values, by = c("Species","ID")) # Replace SampleID with your actual sample ID column name
+  left_join(combined_values, by = c("Species","ID","experiment")) # Replace SampleID with your actual sample ID column name
 
-# Optional: If you want to keep only one set of Respiration and NetPhoto columns, you can do:
 Respo.R_Normalized <- Respo.R_Normalized %>%
+  # Create Respiration and NetPhoto without creating duplicates
   mutate(
-    Respiration = ifelse(!is.na(Respiration.x), Respiration.x, Respiration.y), # Choose non-NA value
-    NetPhoto = ifelse(!is.na(NetPhoto.x), NetPhoto.x, NetPhoto.y) # Choose non-NA value
+    Respiration = coalesce(Respiration.x, Respiration.y),  # Combine Respiration.x and Respiration.y, keeping the non-NA value
+    NetPhoto = coalesce(NetPhoto.x, NetPhoto.y)  # Combine NetPhoto.x and NetPhoto.y, keeping the non-NA value
   ) %>%
-  select(-Respiration.x, -Respiration.y, -NetPhoto.x, -NetPhoto.y) # Remove duplicate columns
+  # Remove duplicate rows based on specific columns (Species, ID, experiment)
+  distinct(Species, ID, experiment, .keep_all = TRUE)
 
 Respo.R_Normalized <- Respo.R_Normalized %>%  
   mutate(Respiration = -Respiration,# Make respiration positive by negating it

@@ -1,0 +1,167 @@
+---
+title: "rockweed_predation"
+author: "Tena Dhayalan"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: cosmo
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+```{r,echo=FALSE, message=FALSE}
+library(dplyr)
+library(broom)
+library(purrr)
+library(lubridate)
+library(tidyverse)
+library(nlstools)
+library(here)
+library(stringr)
+library(lmerTest)
+library(lme4)
+library(knitr)
+require(kableExtra)
+library(tidyverse)
+library(car)
+library(janitor)
+options(knitr.table.format = "html")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  warning = FALSE,    # Show warnings
+  message = FALSE,    # Show messages
+  error = FALSE       # Show errors
+)
+```
+
+
+```{r, echo = FALSE}
+#load datasets
+april <- read_csv(here("Data","growth","rockweed_weights_april.csv"))
+may <- read_csv(here("Data","growth","rockweed_weights_may.csv"))
+```
+
+April
+```{r, echo = FALSE}
+#calculate percent weight change
+april$date <- replace(april$date, april$date == 20240428, 20240429) #make all respo final dates the same day for processing
+
+predation_wide <- april %>%
+  pivot_wider(values_from = c(weight_g), names_from=date) %>% #combine data by date
+  clean_names() %>%
+  mutate(percent_change_week1=100*(x20240410-x20240403)/x20240403)%>% #calculate diff between weeks
+  mutate(percent_change_week2=100*(x20240417-x20240410)/x20240410)%>%
+  mutate(percent_change_week3=100*(x20240424-x20240417)/x20240417)%>%
+  mutate(percent_change_week4=100*(x20240429-x20240424)/x20240424)%>%
+  mutate(percent_change=100*(x20240429-x20240403)/x20240403)
+
+```
+
+### plot by predation
+# full exp
+```{r, echo = FALSE}
+predation_wide %>%
+  ggplot(aes(x=factor(p_h),y=percent_change, color=factor(temperature)))+
+  geom_boxplot()+
+  geom_jitter(position=position_dodge())+
+  facet_wrap(~predator)
+
+```
+
+plot percent change over time
+```{r, echo = FALSE}
+april %>%
+  ggplot(aes(x=factor(date),y=weight_g, color=predator, shape=factor(temperature)))+
+  geom_line(aes(group=factor(rockweed_ID)))+
+  geom_jitter(position=position_dodge())+
+  facet_wrap(~tank)+
+  theme(axis.text.x = element_blank())
+```
+
+
+plot percent change by temperature
+```{r, echo = FALSE}
+predation_wide %>%
+  ggplot(aes(x=factor(p_h),y=percent_change, color=predator))+
+  geom_boxplot()+
+  geom_jitter(position=position_dodge())+
+  facet_wrap(~temperature)+
+  labs(color = "Treatment", x= "pH", y= "Change in rockweed weight (%)")+
+  scale_color_manual(labels = c("Control", "Predator"), values = c("cyan3", "red1"))
+  
+```
+
+stats
+```{r, echo = FALSE}
+predation_wide$predator <- as.factor(predation_wide$predator)
+predation_wide$temperature <- as.factor(predation_wide$temperature)
+predation_wide$p_h <- as.factor(predation_wide$p_h)
+
+predationmodel <- lm(percent_change ~ predator * temperature * p_h, data=predation_wide)
+
+plot(predationmodel)
+anova(predationmodel)
+```
+
+May
+```{r, echo = FALSE}
+#calculate percent weight change
+#may$date <- replace(may$date, may$date == 20240428, 20240429) #make all respo final dates the same day for processing
+
+predation_wide_m <- may %>% 
+  select(date, rockweed_ID, weight_g, pH, temperature, predator) %>%
+  pivot_wider(values_from = c(weight_g), names_from=date) %>% #combine data by date
+  clean_names() %>%
+  mutate(percent_change_week1=100*(x20240525-x20240518)/x20240518)%>% #calculate diff between weeks
+  mutate(percent_change_week2=100*(x20240601-x20240525)/x20240525)%>%
+  mutate(percent_change_week3=100*(x20240608-x20240601)/x20240601)%>%
+  mutate(percent_change_week4=100*(x20240613-x20240608)/x20240608)%>%
+  mutate(percent_change=100*(x20240613-x20240518)/x20240518)
+
+```
+
+### plot by predation
+# full exp
+```{r, echo = FALSE}
+predation_wide_m %>% 
+  ggplot(aes(x=factor(p_h),y=percent_change, color=factor(temperature)))+
+  geom_boxplot()+
+  geom_jitter(position=position_dodge())+
+  facet_wrap(~predator)
+
+```
+
+plot percent change over time
+```{r, echo = FALSE}
+may %>%
+  ggplot(aes(x=factor(date),y=weight_g, color=predator, shape=factor(temperature)))+
+  geom_line(aes(group=factor(rockweed_ID)))+
+  geom_jitter(position=position_dodge())+
+  facet_wrap(~tank)+
+  theme(axis.text.x = element_blank())
+```
+plot percent change by temperature
+```{r, echo = FALSE}
+predation_wide_m %>%
+  ggplot(aes(x=factor(p_h),y=percent_change, color=predator))+
+  geom_boxplot()+
+  geom_jitter(position=position_dodge())+
+  facet_wrap(~temperature)+
+  labs(color = "Treatment", x= "pH", y= "Change in rockweed weight (%)")+
+  scale_color_manual(labels = c("Control", "Predator"), values = c("cyan3", "red1"))
+  
+```
+
+stats
+```{r, echo = FALSE}
+predation_wide_m$predator <- as.factor(predation_wide$predator)
+predation_wide_m$temperature <- as.factor(predation_wide$temperature)
+predation_wide_m$p_h <- as.factor(predation_wide$p_h)
+
+predationmodel_m <- lm(percent_change ~ predator * temperature * p_h, data=predation_wide_m)
+
+plot(predationmodel_m)
+anova(predationmodel_m)
+```
