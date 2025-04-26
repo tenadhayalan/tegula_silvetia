@@ -87,7 +87,7 @@ Sample.Info.May <-
   left_join(mayPHavg, by = "tank") %>%
   left_join(maycarbavg, by = "tank")
 
-Sample.Info.New <- rbind(Sample.Info.April,Sample.Info.May)
+Sample.Info.New <- bind_rows(Sample.Info.April,Sample.Info.May)
 
 # assigning factors
 Sample.Info.New$BLANK <- as.factor(Sample.Info.New$BLANK)
@@ -186,7 +186,7 @@ beuti %>%
 
 ```{r, echo=FALSE}
 # merging tegula respo data
-respo_dry_clean$ID <- as.factor(respo_dry_clean$ID)
+#respo_dry_clean$ID <- as.factor(respo_dry_clean$ID)
 tegrespodry <- respo_dry_clean %>%
   filter(Species == "Tegula") %>% # filter out rockweeds
   mutate(ID = as.factor(ID))
@@ -533,35 +533,7 @@ tegrespodry %>%
       fill = "Temperature",
       y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
 ```
-
-### Respo by treatment separated by experiment
-```{r}
-tegrespodry <- respo_dry_clean %>%
-  filter(Species == "Tegula") %>% #filter out rockweeds
-  mutate(ID = as.factor(ID))
-
-Teg.Sample.Info.New <- Sample.Info.New %>%
-  filter(Species == "Tegula", BLANK == "0") #filter out rockweeds and blankies
-
-tegrespodry <- tegrespodry %>%
-  left_join(Teg.Sample.Info.New %>% select(pH, block, ID), by = c("block","ID")) #bring in sample info
-
-tegrespodry %>%
-  ggplot(aes(x=pH, y=Respiration, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
-  facet_wrap(~experiment,labeller = as_labeller(c("a" = "April", "b" = "May")))+
-  geom_point()+
-  geom_smooth(method = "lm", formula = y ~ poly(x, 2), se = TRUE) +
-  theme_bw() +
-  theme(strip.background = element_rect(fill = "white"),
-        text = element_text(size = 14)) +
-  scale_fill_manual(values = c("salmon", "salmon4")) +
-  scale_color_manual(values = c("salmon", "salmon4")) +
-  labs(x = expression(pH[T]),
-       color = "Temperature",
-       fill = "Temperature",
-       y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
-
-```
+  
 ## Okay, what if we control for initial weight
 ```{r}
 tegmodel_weight <- lm(Respiration ~ initial_wet_weight, data = tegrespodry) # predicting resp from initial weight
@@ -572,10 +544,17 @@ tegrespodry <- tegrespodry %>%
   mutate(temp_treatment = as.factor(temp_treatment), 
          experiment = as.factor(experiment)) #making temp and exp factors
 
-tegmodel_res <- lm(residuals ~ pH * temp_treatment * experiment, data=tegrespodry)
+# April
+tegmodel_res_april <- lm(residuals ~ pH * temp_treatment, data=tegrespodry %>% filter(experiment == "a"))
 #plot(tegmodel_res)
-anova(tegmodel_res) #model stats, temp, ph x exp, and temp x exp significant
-summary(tegmodel_res)
+anova(tegmodel_res_april) #model stats, temp, ph x exp, and temp x exp significant
+summary(tegmodel_res_april)
+
+# May
+tegmodel_res_may <- lm(residuals ~ pH * temp_treatment, data=tegrespodry %>% filter(experiment == "b"))
+#plot(tegmodel_res)
+anova(tegmodel_res_may) #model stats, temp, ph x exp, and temp x exp significant
+summary(tegmodel_res_may)
 
 tegrespodry %>%
   ggplot(aes(x=pH, y=residuals, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
@@ -599,10 +578,15 @@ tegrespo_avg <- tegrespodry %>%
     avg_res = mean(residuals, na.rm = TRUE)  # calculate mean calc rate
   )
 
-# avg model
-avg_res_model <- lm(avg_res ~ pH * temp_treatment * experiment, data = tegrespo_avg)
-anova(avg_res_model) #model stats, temp, ph x exp, and temp x exp significant, same
-summary(avg_res_model)
+# april avg model
+avg_res_model_april <- lm(avg_res ~ pH * temp_treatment, data = tegrespo_avg %>% mutate(temp_treatment = as.numeric(temp_treatment))%>% filter(experiment == "a"))
+anova(avg_res_model_april) 
+summary(avg_res_model_april)
+
+# april may model
+avg_res_model_may <- lm(avg_res ~ pH * temp_treatment, data = tegrespo_avg %>% filter(experiment == "b"))
+anova(avg_res_model_may) 
+summary(avg_res_model_may)
 
 # avg plot
 
@@ -679,7 +663,17 @@ calc_avg <- calc_new %>%
     avg_calc = mean(umol.cm2.hr, na.rm = TRUE)  # calculate mean calc rate
   )
 
-# avg model
+# april avg model
+avg_calc_model_april <- lm(avg_calc ~ pH * temp_treatment, data = calc_avg %>% filter(experiment == "a"))
+anova(avg_calc_model_april) 
+summary(avg_calc_model_april) 
+
+# may avg model
+avg_calc_model_may <- lm(avg_calc ~ pH * temp_treatment, data = calc_avg %>% filter(experiment == "b"))
+anova(avg_calc_model_may) 
+summary(avg_calc_model_may) 
+
+# avg model altogether
 avg_calc_model <- lm(avg_calc ~ pH * temp_treatment * experiment, data = calc_avg)
 anova(avg_calc_model) # ph x exp, temp x exp
 summary(avg_calc_model) 
@@ -724,20 +718,29 @@ calc_new %>%
 ### C:R
 ```{r}
 tegcalcresp <- tegrespodry %>%
-  select(ID,experiment,Respiration,pH_treatment,temp_treatment) %>%
+  select(ID,experiment,Respiration,pH,temp_treatment) %>%
   left_join(calc %>%
               mutate(ID = as.factor(ID)) %>%
               select(ID, experiment,umol.cm2.hr)) %>%
   mutate(calc_r = umol.cm2.hr/Respiration) %>%
   filter(calc_r < 0.075, calc_r > -0.07)
 
-tegcrespmodel <- lm(calc_r ~ pH_treatment * temp_treatment * factor(experiment), data=tegcalcresp)
+tegcrespmodel <- lm(calc_r ~ pH * temp_treatment * factor(experiment), data=tegcalcresp)
 anova(tegcrespmodel) # ph, temp significant
 summary(tegcrespmodel)
 
+# april
+tegcrespmodel_april <- lm(calc_r ~ pH * temp_treatment, data=tegcalcresp %>% filter(experiment == "a"))
+anova(tegcrespmodel_april) # ph x temp significant
+summary(tegcrespmodel_april)
+
+# may
+tegcrespmodel_may <- lm(calc_r ~ pH * temp_treatment, data=tegcalcresp %>% filter(experiment == "b"))
+anova(tegcrespmodel_may) # ph and temp significant
+summary(tegcrespmodel_may)
 
 tegcalcresp %>%
-  ggplot(aes(x=pH_treatment, y = calc_r, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
+  ggplot(aes(x=pH, y = calc_r, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
   geom_smooth(method = "lm", se = TRUE) +
   facet_wrap(~experiment,labeller = as_labeller(c("a" = "April", "b" = "May")))+
   geom_point(alpha = 0.5)+
@@ -751,7 +754,39 @@ tegcalcresp %>%
        fill = "Temperature",
        x = expression(pH[T]))
 
+# calculate averages 
+calc_r_avg <- tegcalcresp %>%
+  group_by(pH, temp_treatment, experiment) %>%  # group by temp and pH
+  summarize(
+    avg_calcr = mean(calc_r, na.rm = TRUE)  # calculate mean calc:r rate
+  )
 
+# april avg model
+avg_calc_model_april <- lm(avg_calcr ~ pH * temp_treatment, data = calc_r_avg %>% filter (experiment == "a"))
+anova(avg_calc_model_april)
+summary(avg_calc_model) 
+
+# may avg model
+avg_calc_model_may <- lm(avg_calcr ~ pH * temp_treatment, data = calc_r_avg %>% filter (experiment == "b"))
+anova(avg_calc_model_may) # ph, temp
+summary(avg_calc_model_may) 
+
+# avg plot
+
+calc_r_avg %>%
+  ggplot(aes(x=pH, y = avg_calcr, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~experiment,labeller = as_labeller(c("a" = "April", "b" = "May")))+
+  geom_point(alpha = 0.5)+
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"),
+        text = element_text(size = 14)) +
+  scale_fill_manual(values = c("salmon", "salmon4")) +
+  scale_color_manual(values = c("salmon", "salmon4")) +
+  labs(y = expression(Calcification:Respiration),
+       color = "Temperature",
+       fill = "Temperature",
+       x = expression(pH[T]))
 ```
 
 # Rockweed
@@ -923,6 +958,16 @@ avg_gp_model <- lm(avg_gp ~ pH * temp_treatment * experiment, data = rwrespo_avg
 anova(avg_gp_model) # exp, ph x exp sig
 summary(avg_gp_model)
 
+# april avg model
+avg_gp_model_april <- lm(avg_gp ~ pH * temp_treatment, data = rwrespo_avg %>% filter(experiment == "a"))
+anova(avg_gp_model_april) # pH
+summary(avg_gp_model_april)
+
+# may avg model
+avg_gp_model_may <- lm(avg_gp ~ pH * temp_treatment, data = rwrespo_avg %>% filter(experiment == "b"))
+anova(avg_gp_model_may) # pH
+summary(avg_gp_model_may)
+
 # avg plot
 
 # predict using model
@@ -954,14 +999,13 @@ rwrespo_clean %>%
   labs(x = expression(pH[T]),
        color = "Temperature",
        fill = "Temperature",
-       y = expression(GrossPhoto~rate~(mu*mol~O[2]~g^-1~hr^-1)))
+       y = expression(Gross Photo~rate~(mu*mol~O[2]~g^-1~hr^-1)))
 ```
 
 ## Respo
 
 ### Just controls
 ```{r}
-
 #Respiration
 rwmodelR <- lm(Respiration ~ pH * temp_treatment * experiment, data=rwrespo_clean %>% filter(predator == "c"))
 #plot(rwmodelR)
@@ -1081,6 +1125,17 @@ avg_respo_model <- lm(avg_respo ~ pH * temp_treatment * experiment, data = rwres
 anova(avg_respo_model) # temp sig
 summary(avg_respo_model)
 
+# avg model april
+avg_respo_model_april <- lm(avg_respo ~ pH * temp_treatment, data = rwrespo_avg %>% filter(experiment == "a"))
+anova(avg_respo_model_april) # ph x temp sig
+summary(avg_respo_model_april)
+
+# avg model may
+avg_respo_model_may <- lm(avg_respo ~ pH * temp_treatment, data = rwrespo_avg %>% filter(experiment == "b"))
+anova(avg_respo_model_may) # nothing
+summary(avg_respo_model_may)
+
+
 # avg plot
 
 # predict using model
@@ -1114,7 +1169,6 @@ rwrespo_clean %>%
        fill = "Temperature",
        y = expression(Respiration~rate~(mu*mol~O[2]~g^-1~hr^-1)))
 ```
-  
 
 ## Net Photosynthesis
 
