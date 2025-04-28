@@ -50,6 +50,7 @@ respo_dry_clean <- read.csv(here("Data", "PR_2024","PR_final_normalized_dry_clea
 cn <- read.csv(here("Data", "CN ratio","cn_exp1.csv")) # C:N rockweed data
 cuti <- read.csv(here("Data","pH_temp","cuti_daily.csv")) # coastal upwelling index
 beuti <- read.csv(here("Data","pH_temp","beuti_daily.csv")) #biologically effective upwelling index
+temp <- read.csv(here("Data","field","marine_ptfermin_temp.csv"))
 ```
 
 ### adding all ph and carb data together
@@ -93,6 +94,30 @@ Sample.Info.New <- bind_rows(Sample.Info.April,Sample.Info.May)
 Sample.Info.New$BLANK <- as.factor(Sample.Info.New$BLANK)
 Sample.Info.New$ID <- as.factor(Sample.Info.New$ID)
 Sample.Info.New$dry_weight <- as.numeric(Sample.Info.New$dry_weight)
+
+```
+
+## pH and temp graphs
+```{r}
+aprilpH <- aprilpH %>%
+  mutate(experiment = "Low Upwelling")
+maypH <- maypH %>%
+  mutate(experiment = "High Upwelling")
+AllpHData <- bind_rows(aprilpH, maypH)
+
+AllpHData %>%
+  ggplot(aes(x=as.factor(expected_temp), y= TempInSitu, group = interaction(expected_temp,experiment), color = experiment))+
+  geom_boxplot(width = 0.5, outlier.alpha = 0.1)+
+  labs(x = "Expected temperature", y = "Temperature in situ")
+
+AllpHData %>%
+  ggplot(aes(x=expected_pH, y= pH, group = interaction(expected_pH,experiment), color = experiment))+
+  geom_boxplot(width=0.1, outlier.alpha = 0.1)+
+  labs(x = "Expected pH", y = "pH in situ")
+```
+
+## field temp
+```{r}
 
 ```
 
@@ -143,7 +168,7 @@ cuti %>%
 ## BEUTI
 ```{r, echo=FALSE}
 beuti <- beuti %>%
-  filter(year== 2024, month %in% 3:5) # select only data from March to May 2024
+  filter(year== 2024, month %in% 3:6) # select only data from March to May 2024
 
 beuti <- beuti %>%
   mutate(date = make_date(year, month, day)) # make a column of date to combine year, month, and day
@@ -162,15 +187,8 @@ collections <- data.frame(date = collection_dates,
 beuti %>%
   ggplot(aes(x = as.factor(date), y = X34N)) +
   geom_smooth(aes(x = date, y = X34N),method = "loess", color = "salmon4", size = 1)+
-  #geom_line(aes(x = week, y = weekly_avg), color = "salmon4", size = 1) + # weekly avg line
   geom_point(aes(x = date, y = X34N), color = "salmon4", alpha = 0.2) +
   geom_point(data = collections, aes(x= date, y = loess_fitted), color = "salmon", size = 4) +  # LOESS y values
-  #geom_point(data = beuti %>% filter(date == as.Date("2024-03-29")), 
-            # aes(x = date, y = X34N), 
-             #color = "salmon", size = 4) +  # collection date 1
-  #geom_point(data = beuti %>% filter(date == as.Date("2024-05-13")), 
-           #  aes(x = date, y = X34N), 
-            # color = "salmon", size = 4) +  # collection date 2
   theme_bw()+
   theme(
     strip.background = element_rect(fill = "white"),
@@ -577,6 +595,11 @@ tegrespo_avg <- tegrespodry %>%
   summarize(
     avg_res = mean(residuals, na.rm = TRUE)  # calculate mean calc rate
   )
+
+#avg model
+avg_res_model <- lm(avg_res ~ pH * temp_treatment * experiment, data = tegrespo_avg)
+anova(avg_res_model) 
+summary(avg_res_model)
 
 # april avg model
 avg_res_model_april <- lm(avg_res ~ pH * temp_treatment, data = tegrespo_avg %>% mutate(temp_treatment = as.numeric(temp_treatment))%>% filter(experiment == "a"))
