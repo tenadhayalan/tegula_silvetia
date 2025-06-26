@@ -76,7 +76,7 @@ calc <- left_join(calc, mean.blanks) #bring in mean blanks to calc.data
 
 #bring in time, mass, volume
 
-time.data <- respo[, c("ID", "tank_exp", "pH_treatment", "temp_treatment", "volume", "wet_weight", "dry_shell_weight", "TA.start", "TA.stop")] 
+time.data <- respo[, c("ID", "tank_exp", "pH_treatment", "temp_treatment", "volume", "wet_weight", "dry_weight", "TA.start", "TA.stop")] 
 calc$tank <- as.character(calc$tank_exp) # convert tank to character to join
 
 full.calc <- left_join(calc, time.data)
@@ -98,7 +98,7 @@ clean.full.calc$volume <- clean.full.calc$volume * 0.001
 
 #equation to calculate NEC rates 
 
-clean.full.calc$umol.cm2.hr<-((clean.full.calc$deltaTA/2)*(1.025)*(clean.full.calc$volume))/((clean.full.calc$dry_shell_weight)*(clean.full.calc$timediff))
+clean.full.calc$umol.cm2.hr<-((clean.full.calc$deltaTA/2)*(1.025)*(clean.full.calc$volume))/((clean.full.calc$dry_weight)*(clean.full.calc$timediff))
 
 
 write_csv(clean.full.calc, here("Data","TA","NEC.csv"))
