@@ -1,272 +1,254 @@
 ### PI curve #####################################################
-# Created by Jamie Kerlin
+# Created by Jamie Kerlin, edited by Tena Dhayalan
 ##################################################################
 
-### Load libraries ################################################
-library(tidyverse)
-library(here)
-library(patchwork)
-library(segmented)
-library(plotrix)
-library(gridExtra)
-library(LoLinR)
-library(lubridate)
-library(chron)
+#Install Packages 
 
-### Load data ###################################################
+if ("github" %in% rownames(installed.packages()) == 'FALSE') install.packages('github') 
+if ("segmented" %in% rownames(installed.packages()) == 'FALSE') install.packages('segmented') 
+if ("plotrix" %in% rownames(installed.packages()) == 'FALSE') install.packages('plotrix') 
+if ("gridExtra" %in% rownames(installed.packages()) == 'FALSE') install.packages('gridExtra') 
+if ("LoLinR" %in% rownames(installed.packages()) == 'FALSE') devtools::install_github('colin-olito/LoLinR') 
+if ("lubridate" %in% rownames(installed.packages()) == 'FALSE') install.packages('lubridate') 
+if ("chron" %in% rownames(installed.packages()) == 'FALSE') install.packages('chron') 
+if ("tidyverse" %in% rownames(installed.packages()) == 'FALSE') install.packages('tidyverse') 
+if ("here" %in% rownames(installed.packages()) == 'FALSE') install.packages('here') 
+if ("patchwork" %in% rownames(installed.packages()) == 'FALSE') install.packages('patchwork') 
+
+
+#Read in required libraries
+##### Include Versions of libraries
+library("segmented")
+library("plotrix")
+library("gridExtra")
+library("LoLinR")
+library("lubridate")
+library("chron")
+library('tidyverse')
+library('here')
+library("patchwork")
+
+# get the file path
+
+
 #set the path to all of the raw oxygen datasheets
-path.p<-here("Short_term",
-             "Data_Raw",
-             "PR",
-             "PI_curve",
-             "PI_curve_2021_08_07",
-             "RawO2Files") #the location of all your respirometry files
+path.p<-here("Data",
+             "PR_2024",
+             "RawO2",
+             "PI_curve") #the location of all your respirometry files
 
+# bring in all of the individual files
 file.names<-basename(list.files(path = path.p, pattern = "csv$", recursive = TRUE)) #list all csv file names in the folder and subfolders
 
+#basename above removes the subdirectory name from the file, re-nale as file.names.full
+file.names.full<-list.files(path = path.p, pattern = "csv$", recursive = TRUE) 
 
-#basename above removes the subdirectory name from the file
-#add file names that include the subdirectory name (note, these are the same for this example, but I often have lots of subfolders for different Runs)
-file.names.full<-list.files(path = path.p, pattern = "csv$", recursive = TRUE) #list all csv file names in the folder and subfolders
+#generate a 3 column dataframe with specific column names
+# data is in umol.L.sec
+Respo.R<- data.frame(matrix(NA, nrow=length(file.names), ncol=5))
+Respo.R <- tibble(
+  FileName = character(),
+  run = integer(),
+  run_id = character(),
+  umol.L.sec = numeric(),
+  Intercept = numeric(),
+  Temp.C = numeric()
+)
+#View(Respo.R)
 
-#generate an empty 3 column dataframe with specific column names
-Photo.R <- data.frame(matrix(NA, nrow=length(file.names), ncol=5))
-colnames(Photo.R) <- c("fragment.ID.full","Intercept", "umol.L.sec","Temp.C","Light_Dark") # name the columns
+#Load your respiration data file, with all the times, water volumes(mL), snail weight (dry weight) (g)
+Sample.Info <- read_csv(file = here("Data",
+                                    "PR_2024",
+                                    "Metadata_PI.csv"))
+#View(Sample.Info)
+
+##### Make sure times are consistent ####
+
+# make start and stop times real times, so that we can join the data frames
+Sample.Info$Date <- as.Date(as.character(Sample.Info$Date), format = "%Y%m%d")  # make this into a real date
+Sample.Info$start.time <- as.POSIXct(paste(Sample.Info$Date, Sample.Info$start.time),format="%Y-%m-%d %H:%M:%S", tz = "") #convert time with date
+Sample.Info$stop.time <- as.POSIXct(paste(Sample.Info$Date, Sample.Info$stop.time),"%Y-%m-%d %H:%M:%S", tz = "") #convert time with date
+
+#view(Sample.Info)
+
+for (i in 1:length(file.names.full)) {
+  
+  # Extract base file name
+  rename <- sub(".csv", "", file.names[i])
+  
+  # Filter Sample.Info to get all runs for this file
+  runs <- Sample.Info %>% filter(FileName == rename)
+  
+  # Load the full data file
+  Respo.Data1 <- read_csv(file.path(path.p, file.names.full[i]), skip = 1) %>%
+    dplyr::select(Date, Time, Value, Temp) %>%
+    mutate(Date = as.Date(as.character(Date), format = "%m/%d/%Y")) %>%
+    mutate(Time = as.POSIXct(paste(Date, Time),"%Y-%m-%d %H:%M:%S", tz = "")) %>%
+    drop_na()
+  
+  
+  # Start after 2 minutes (120 seconds)
+  Respo.Data1 <- Respo.Data1[-c(1:120),] %>%
+    mutate(sec_total = 1:n())  # total seconds since beginning of file
+  
+  # Loop through runs within this file
+  for (j in 1:nrow(runs)) {
+    
+    # Extract this run’s start and stop times
+    run_start <- as.POSIXct(runs$start.time[j], format = "%H:%M:%S", tz = "")
+    run_stop <- as.POSIXct(runs$stop.time[j], format = "%H:%M:%S", tz = "")
+    
+    # Subset to data for this run
+    run_data <- Respo.Data1 %>%
+      filter(Time >= run_start & Time <= run_stop) %>%
+      mutate(sec = row_number()) # sets sec as only within this run
+    
+    # thin this run's data
+    thin_val <- thinData(run_data[, c("sec", "Value")], by = 20)$newData1
+    colnames(thin_val) <- c("sec", "Value")
+    
+    thin_temp <- thinData(run_data[, c("sec", "Temp")], by = 20)$newData1
+    colnames(thin_temp) <- c("sec", "Temp")
+    
+    # Combine
+    thinned <- thin_val %>%
+      mutate(Temp = thin_temp$Temp)
+    
+    # Apply rank-local-regression
+    Regs <- rankLocReg(
+      xall = thinned$sec,
+      yall = thinned$Value,
+      alpha = 0.5,
+      method = "pc",
+      verbose = TRUE
+    )
+    
+    # Store result
+    Respo.R <- add_row(Respo.R,
+                       FileName = rename,
+                       run = runs$run[j],  # uses run from Sample.Info
+                       run_id = paste0(tools::file_path_sans_ext(rename), "_", runs$run[j]), # unique run x file name
+                       umol.L.sec = Regs$allRegs[1, 5],
+                       Intercept = Regs$allRegs[1, 4],
+                       Temp.C = mean(thinned$Temp, na.rm = TRUE)
+    )
+  }
+}
+
+#export raw data and read back in as a failsafe 
+#this allows me to not have to run the for loop again 
+write_csv(Respo.R, here("Data",
+      "PR_2024",
+      "PI_respo.csv"))  
 
 
-#Load Sample Info
-Sample.Info <- read_csv(here("Short_term", "Data_Raw", "PR", "PI_curve", 
-                             "PI_curve_2021_08_07", "Metadata", "pi_metadata.csv")) %>%
-  mutate(new = "PI_Ch") %>%
-  unite("fragment.ID.full", c(new, chamber.channel), sep = "", remove = FALSE) %>%
-  unite("fragment.ID.full", c(fragment.ID.full, run, fragment.ID), sep = "_", remove = FALSE)
+####----after loop----####
+Sample.Info <- read_csv(file = here("Data",
+              "PR_2024",
+              "Metadata_PI.csv"))
+Respo.R <- read_csv(here("Data",
+        "PR_2024",
+        "PI_respo.csv"))  
 
-sa_volume <- read_csv(here("Short_term", "Data_Raw", "PR", "PI_curve", 
-                           "PI_curve_2021_08_07", "Metadata", "sample_sa_volume.csv"))
+# Calculate Respiration rate
+
+Sample.Info <- Sample.Info %>%
+  mutate(BLANK = as.factor(BLANK)) %>%
+  mutate(run_id = paste0(FileName, "_", run))
+
+Respo.R <- Respo.R %>%
+  left_join(Sample.Info) %>% # Join the raw respo calculations with the metadata
+  mutate(umol.sec = umol.L.sec*(volume/1000)) %>% #Account for chamber volume to convert from umol L-1 s-1 to umol s-1. This standardizes across water volumes and removes per Liter
+  mutate_if(sapply(., is.character), as.factor) %>% #convert character columns to factors
+  mutate(BLANK = as.factor(BLANK)) #make the blank column a factor
+
+#View(Respo.R)
+
+#Account for blank rate by light/Dark and Block (if we do one blank per block)
+
+#View(Respo.R)
+
+# Step 1: Normalize respiration data
+Respo.R.Normalized <- Respo.R %>%
+  group_by(run, pH_treatment, Light_Dark, Species, BLANK) %>%
+  summarise(umol.sec = mean(umol.sec, na.rm = TRUE), .groups = 'drop') %>%
+  filter(BLANK == 1) %>%
+  dplyr::select(run, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>%
+  right_join(Respo.R, by = c("run", "pH_treatment", "Light_Dark", "Species")) %>%
+  mutate(
+    AFDW = as.numeric(as.character(AFDW)), # Convert to numeric
+    umol.sec.corr = umol.sec - blank.rate,
+    umol.gram.hr = ((umol.sec.corr * 3600) / AFDW)) %>%
+  filter(BLANK == 0)
 
 
-# make start and stop times real times
-Sample.Info$start.time <- as.POSIXct(Sample.Info$start.time,format="%H:%M:%S", tz = "") #convert time from character to time
-Sample.Info$stop.time <- as.POSIXct(Sample.Info$stop.time,format="%H:%M:%S", tz = "") #convert time from character to time
+#PI curve fit
 
+#renaming variables
+PAR = as.numeric(Respo.R.Normalized$run)
+Pc = as.numeric(Respo.R.Normalized$umol.gram.hr)
 
-PR<-c('Photo','Resp')
+summary(PAR)
+summary(Pc)
+plot(PAR, Pc)
 
-# for every file in list calculate O2 uptake or release rate and add the data to the Photo.R dataframe
-for(i in 1:length(file.names.full)) { # for every file in list calculate O2 uptake or release rate and add the data to the Photo.R dataframe
-  
-  #find the lines in sample info that have the same file name that is being brought it
-  FRow<-which(Sample.Info$fragment.ID==strsplit(file.names[i],'.csv'))
-  
-  # read in the O2 data one by one
-  Photo.Data1 <-read.csv(file.path(path.p,file.names.full[i]), skip = 1, header=T) # skips the first line
-  Photo.Data1  <- Photo.Data1[,c("Time","Value","Temp")] #subset columns of interest
-  Photo.Data1$Time <- as.POSIXct(Photo.Data1$Time,format="%H:%M:%S", tz = "") #convert time from character to time
-  Photo.Data1 <- na.omit(Photo.Data1)
-  
-  
-  # clean up some of the data
-  n<-dim(Photo.Data1)[1] # length of full data
-  Photo.Data1 <-Photo.Data1[(n-120):(n-3),] #start at data point ~2 minute in to avoid excess noise from start of run and remove last 3 lines containing text
-  n<-dim(Photo.Data1)[1] #list length of trimmed data
-  Photo.Data1$sec <- (1:n) #set seconds by one from start to finish of run in a new column
-  
-  
-  #Save plot prior to and after data thinning to make sure thinning is not too extreme
-  rename <- sub(".csv","", file.names[i]) # remove all the extra stuff in the file name
-  
-  pdf(paste0("Short_term/Data_Raw/PR/PI_curve/PI_curve_2021_08_07/Output/",rename,"thinning.pdf")) # open the graphics device
-  
-  par(omi=rep(0.3, 4)) #set size of the outer margins in inches
-  par(mfrow=c(1,2)) #set number of rows and columns in multi plot graphic
-  plot(Value ~ sec, data=Photo.Data1 , xlab='Time (seconds)', ylab=expression(paste(' O'[2],' (',mu,'mol/L)')), type='n', axes=FALSE) #plot (empty plot to fill) data as a function of time
-  usr  <-  par('usr') # extract the size of the figure margins
-  rect(usr[1], usr[3], usr[2], usr[4], col='grey90', border=NA) # put a grey background on the plot
-  whiteGrid() # make a grid
-  box() # add a box around the plot
-  points(Photo.Data1 $Value ~ Photo.Data1 $sec, pch=16, col=transparentColor('dodgerblue2', 0.6), cex=1.1)
-  axis(1) # add the x axis
-  axis(2, las=1) # add the y-axis
-  
-  # This the data to make the code run faster
-  Photo.Data.orig<-Photo.Data1#save original unthinned data
-  Photo.Data1 <-  thinData(Photo.Data1 ,by=20)$newData1 #thin data by every 20 points for all the O2 values
-  Photo.Data1$sec <- as.numeric(rownames(Photo.Data1 )) #maintain numeric values for time
-  Photo.Data1$Temp<-NA # add a new column to fill with the thinned data
-  Photo.Data1$Temp <-  thinData(Photo.Data.orig,xy = c(1,3),by=20)$newData1[,2] #thin data by every 20 points for the temp values
-  
-  # plot the thinned data
-  plot(Value ~ sec, data=Photo.Data1 , xlab='Time (seconds)', ylab=expression(paste(' O'[2],' (',mu,'mol/L)')), type='n', axes=FALSE) #plot thinned data
-  usr  <-  par('usr')
-  rect(usr[1], usr[3], usr[2], usr[4], col='grey90', border=NA)
-  whiteGrid()
-  box()
-  points(Photo.Data1 $Value ~ Photo.Data1 $sec, pch=16, col=transparentColor('dodgerblue2', 0.6), cex=1.1)
-  axis(1)
-  axis(2, las=1)
-  ##Olito et al. 2017: It is running a bootstrapping technique and calculating the rate based on density
-  #option to add multiple outputs method= c("z", "eq", "pc")
-  Regs  <-  rankLocReg(xall=Photo.Data1$sec, yall=Photo.Data1$Value, alpha=0.5, method="pc", verbose=TRUE)  
-  
-  # add the regression data
-  plot(Regs)
-  dev.off()
-  
-  # fill in all the O2 consumption and rate data
-  Photo.R[i,2:3] <- Regs$allRegs[1,c(4,5)] #inserts slope and intercept in the dataframe
-  Photo.R[i,1] <- rename #stores the file name in the Date column
-  Photo.R[i,4] <- mean(Photo.Data1$Temp, na.rm=T)  #stores the Temperature in the Temp.C column
-  #Photo.R[i,5] <- PR[j] #stores whether it is photosynthesis or respiration
-  
-  
-  # rewrite the file everytime... I know this is slow, but it will save the data that is already run
+#fit a model using a Nonlinear Least Squares regression of a non-rectangular hyperbola (Marshall & Biscoe, 1980)
+curve.nlslrc= nlsLM(Pc ~ (1/(2*theta))*(AQY*PAR+Am-sqrt((AQY*PAR+Am)^2-4*AQY*theta*Am*PAR))-Rd,
+                  start=list(
+                    Am=(max(Pc)-min(Pc)),
+                    AQY= 0.001,
+                    Rd=abs(min(Pc)),
+                    theta=0.6
+                    ),
+                  control = nls.lm.control(maxiter = 200)
+)
+
+#summary of model fit
+my.fit <- summary(curve.nlslrc)
+
+#define model fit (hyperbolic tangent, more common way to fit) 
+
+model_fun <- function(x) {
+  (1/(2*summary(curve.nlslrc)$coef[4,1]))*
+    (summary(curve.nlslrc)$coef[2,1]*x+summary(curve.nlslrc)$coef[1,1]-sqrt((summary(curve.nlslrc)$coef[2,1]*x+summary(curve.nlslrc)$coef[1,1])^2-4*summary(curve.nlslrc)$coef[2,1]*summary(curve.nlslrc)$coef[4,1]*summary(curve.nlslrc)$coef[1,1]*x))-summary(curve.nlslrc)$coef[3,1]
 }
 
 
-write.csv(Photo.R, 'Short_term/Data_Raw/PR/PI_curve/PI_curve_2021_08_07/Output/Photo.R.csv')  
-View(Photo.R)
-
-# Calculate P and R rate
-
-fragIDs <- Sample.Info %>%
-  dplyr::select(fragment.ID.full, fragment.ID, run) 
-
-Photo.R1 <- left_join(Photo.R, fragIDs)
-Photo.R2 <- left_join(Photo.R1, sa_volume)
-View(Photo.R2)
-
-
-#Convert sample volume to L
-Photo.R2$volume <- Photo.R2$volume/1000 #calculate volume
-
-#Account for chamber volume to convert from umol L-1 s-1 to umol s-1. This standardizes across water volumes (different because of coral size) and removes per Liter
-Photo.R2$umol.sec <- Photo.R2$umol.L.sec*Photo.R2$volume
-
-#Account for blank rate by temperature
-#convert character columns to factors
-Photo.R3 <- Photo.R2 %>%
-  mutate_if(sapply(., is.character), as.factor)
-View(Photo.R3)
-
-#make the blank column a factor
-Photo.R4 <- Photo.R3 %>%
-  mutate(BLANK = if_else(fragment.ID == "BLANK1" | fragment.ID == "BLANK2", 1, 0))
-
-photo.blnk <- aggregate(umol.sec ~ run*BLANK, data=Photo.R4, mean)
-# pull out only the blanks
-
-photo.blnk2 <- photo.blnk %>%
-  filter(BLANK == 1) %>%
-  dplyr::select(!BLANK) %>%
-  rename(blank.rate = umol.sec) 
-
-# join the blank data with the rest of the data
-Photo.R5 <- left_join(Photo.R4, photo.blnk2)
-
-# subtract the blanks######################
-Photo.R6 <- Photo.R5 %>%
-  mutate(umol.sec.corr = umol.sec - blank.rate)
-
-View(Photo.R6)
-
-#### Normalize to surface area #####
-
-Photo.R7 <- Photo.R6 %>%
-  mutate(umol.cm2.hr = (umol.sec.corr*3600)/surf.area.cm2) %>% #convert to hour and normalize to surface area
-  filter(BLANK == 0) %>% # remove blanks
-  dplyr::select(!Light_Dark)  #dont need this column
-  # mutate(rate.ln = log(umol.cm2.hr + 0.1)) #log the rates #produces NAs because of negative rates
-
-Photo.R7 %>%
-  write_csv(here("Short_term", "Data_Raw", "PR", "PI_curve", 
-                 "PI_curve_2021_08_07", "Output", "PI_rates.csv"))
-
-PhotoMeans<- Photo.R7 %>%
-  group_by(run)%>%
-  summarise(rates.mean = mean(umol.cm2.hr), se = sd(umol.cm2.hr)/sqrt(n()))
-
-
-# plot the raw data with the means on top
-ggplot()+
-  theme_bw()+  
-  #geom_point(data=Photo.R, aes(x=run, y=umol.cm2.hr, alpha = 0.05), position = position_dodge(width = 0.2), size=4)+
-  geom_point(data=PhotoMeans, aes(x=run, y=rates.mean),  size=1)+
-  geom_line(data = PhotoMeans,  aes(x=run, y=rates.mean), size=1)+
-  geom_errorbar(data = PhotoMeans, aes(x = run, ymin=rates.mean-se, ymax=rates.mean+se, width=.2))
-#facet_wrap(~ Species, labeller = labeller(.multi_line = FALSE))+
-ggsave('PI_curve_sites1/Output/RespirationRates.png')
-
-#Mo'orea PI curve fit
-#pulling out numeric for everything, pull put for high and pull out for low and do a curve 
-PAR <- as.numeric(Photo.R7$run)
-
-Pc <- as.numeric(Photo.R7$umol.cm2.hr)
-
-plot(PAR,Pc,xlab="",
-     ylab="",
-     xlim=c(0,max(PAR)),
-     ylim=c(-1,1.2),
-     cex.lab=0.8,cex.axis=0.8,cex=1, main="",
-     adj=0.05)
-
-#set plot info
-
-mtext(expression("Photon Flux Density ("*mu*"mol photons "*m^-2*s^-1*")"),side=1,line=3.3,cex=1)
-
-#add labels
-
-mtext(expression(Photosynthetic~Rate* " ("*mu*"mol "*O[2]*" "*cm^-2*h^-1*")"),side=2,line=2,cex=1)
-
-#add labels
-
-#fit a model using a Nonlinear Least Squares regression of a non-rectangular hyperbola (Marshall & Biscoe, 1980)
-
-curve.nlslrc= nls(Pc ~ (1/(2*theta))*(AQY*PAR+Am-sqrt((AQY*PAR+Am)^2-4*AQY*theta*Am*PAR))-Rd,start=list(Am=(max(Pc)-min(Pc)),AQY=0.001,Rd=-min(Pc),theta=0.6)) 
-
-my.fit <- summary(curve.nlslrc)
-#summary of model fit
-
-
-#draw the curve using the model fit
-#hyperbolic tangent, more common way to fit 
-
-mor.curve.fitting <- curve((1/(2*summary(curve.nlslrc)$coef[4,1]))*(summary(curve.nlslrc)$coef[2,1]*x+summary(curve.nlslrc)$coef[1,1]-sqrt((summary(curve.nlslrc)$coef[2,1]*x+summary(curve.nlslrc)$coef[1,1])^2-4*summary(curve.nlslrc)$coef[2,1]*summary(curve.nlslrc)$coef[4,1]*summary(curve.nlslrc)$coef[1,1]*x))-summary(curve.nlslrc)$coef[3,1],lwd=2,col="blue",add=T)
-
-
-
-
-#Amax (max gross photosytnthetic rate)
-
+#extract parameters
+#Amax (max gross photosynthetic rate)
 Pmax.gross <- my.fit$parameters[1]
 
-
 #AQY (apparent quantum yield) alpha
-
 AQY <- my.fit$parameters[2]
 
-
 #Rd (dark respiration)
-
 Rd <- my.fit$parameters[3]
 
-
 # Ik light saturation point
-
 Ik <- Pmax.gross/AQY
 
-# add a line to figure for the Ik or saturation point 
 
-abline(v=Ik, col="red", lty=3, lwd = 3)
-text(x = 300, y = 1.0, label = "Ik", srt = 0)
+# plot PI curve
+Respo.R.Normalized %>%
+  ggplot(aes(x = run, y = umol.gram.hr, color = as.factor(temp_treatment)))+
+  geom_point(alpha = 0.3)+
+  stat_function(fun = model_fun, color = "#0EAD69", size = 1.2) +
+  scale_color_manual(values = c("skyblue2", "firebrick1")) +
+  theme(
+    strip.background = element_rect(fill = "white"),
+    text = element_text(size = 18)) +
+  labs(x = expression("Photon Flux Density ("*mu*"mol photons "*m^-2*s^-1*")"),
+       y = expression(Photosynthetic~Rate* " ("*mu*"mol "*O[2]*" "*g^-2*h^-1*")"),
+       color = expression(paste("Temperature (",degree,"C)")))+
+  geom_vline(xintercept = Ik, col = "black", lty = 3, lwd = 1)+ 
+  annotate("text", x = 425, y = 1.0, label = expression(I[k]))+
+  theme_bw()
 
-dev.copy(png,'Short_term/Data_Raw/PR/PI_curve/PI_curve_2021_08_07/Output/PIcurve.png', width = 5, height = 4, units = "in", res = 1200)
-dev.off()
-
+ggsave("PI curve.png", path=here("Output"), width = 10, height = 6)
 
 # Ic light compensation point
 
 Ic <- Rd/AQY
-
 
 # Net photosynthetic rates
 
@@ -275,34 +257,5 @@ Pmax.net <- Pmax.gross-Rd
 
 #output parameters into a table
 
-Mor.PI.Output <- as.data.frame(cbind(Pmax.gross, Pmax.net, -Rd, AQY,Ik,Ic)) %>%
-  write_csv(here("Short_term", "Data_Raw", "PR", "PI_curve",
-                 "PI_curve_2021_08_07", "Output", "PIcurve_values.csv"))
-
-
-
-pdf("Short_term/Data_Raw/PR/PI_curve/PI_curve_2021_08_07/Output/PIcurve.pdf")
-
-getwd()
-
-dev.off()
-
-#randomize my tanks and samples
-x3 <- sample (1:10, 10)
-x3
-
-###############################################################################################################
-#load three PI curves and light spectrum to then make into one plot
-library(png)
-library(grid)
-library(gridExtra)
-
-plot1 <- readPNG('PI_curve_sites1/Output/Moorea_Sum19_PI_Sites1.png')
-plot2 <- readPNG('PI_curve_sites2/Output/Moorea_Sum19_PI_Sites2.png')
-plot3 <- readPNG('PI_curve_sites3/Output/Moorea_Sum19_PI_Sites3.png')
-plot4 <- readPNG('../../Repositories/Light_Spectrum/Output/blueandmultilight.png')
-
-arrange <- grid.arrange(rasterGrob(plot1), rasterGrob(plot2), rasterGrob(plot3), rasterGrob(plot4), ncol=2, nrow=2)
-
-
-ggsave("PI_curve_sites1/Output/PI_curve_all.pdf", device = "pdf", arrange, width = 8, height = 6)
+PI.curve <- as.data.frame(cbind(Pmax.gross, Pmax.net, -Rd, AQY,Ik,Ic)) %>%
+  write_csv(here("Data", "PR_2024", "PIcurve_values.csv"))
