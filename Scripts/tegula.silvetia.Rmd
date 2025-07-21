@@ -80,28 +80,16 @@ mayPHavg <- aggregate(cbind(pH,TempInSitu) ~ tank, data = maypH, FUN = mean)
 mayPHavg$tank <- as.character(mayPHavg$tank)
 colnames(mayPHavg) <- c("tank","pH","temp")
 
-# calculating avg pCO2 for april 
-aprilcarbavg <- aggregate(cbind(pCO2) ~ tank, data = aprilcarb, FUN = mean)
-aprilcarbavg$tank <- as.character(aprilcarbavg$tank)
-colnames(aprilcarbavg) <- c("tank","pCO2")
-
-# calculating avg pCO2 for may 
-maycarbavg <- aggregate(cbind(pCO2) ~ tank, data = maycarb, FUN = mean)
-maycarbavg$tank <- as.character(maycarbavg$tank)
-colnames(maycarbavg) <- c("tank","pCO2")
-
 # adding pH to metadata
 Sample.Info.April <-
   Sample.Info %>%
   filter(experiment == "a") %>%
-  left_join(aprilPHavg, by = "tank") %>%
-  left_join(aprilcarbavg, by = "tank")
+  left_join(aprilPHavg, by = "tank") 
 
 Sample.Info.May <-
   Sample.Info %>%
   filter(experiment == "b") %>%
-  left_join(mayPHavg, by = "tank") %>%
-  left_join(maycarbavg, by = "tank")
+  left_join(mayPHavg, by = "tank") 
 
 Sample.Info.New <- bind_rows(Sample.Info.April,Sample.Info.May)
 
@@ -148,7 +136,8 @@ AllpHData %>%
 ## carb data
 ```{r}
 aprilcarb <- aprilcarb %>%
-  mutate(experiment = "Early spring") # add label for experiment
+  mutate(experiment = "Early spring")%>% # add label for experiment
+  mutate(SampleID = as.character(SampleID))
 
 maycarb <- maycarb %>%
   mutate(experiment = "Late spring") # add label for experiment
@@ -157,7 +146,7 @@ carb <- bind_rows(aprilcarb, maycarb) # combine all
 
 # calculate means and sds for each column
 carb_summary <- carb %>%
-  group_by(experiment, tank) %>%
+  group_by(experiment, SampleID) %>%
   summarise(
     across(where(is.numeric),
            list(mean = ~mean(.x, na.rm = TRUE),
@@ -181,7 +170,7 @@ carb_summary <- carb_summary %>%
     )
   ) %>%
   ungroup() %>%
-  select(tank, experiment, ends_with("_formatted"))
+  select(SampleID, experiment, ends_with("_formatted"))
 
 write.csv(carb_summary, here("Data/pH_temp/carb_summary.csv"))
 ```
