@@ -206,10 +206,10 @@ temp %>%
   ) 
 
 # calculate averages
-temp_avg <- temp %>%
-  group_by(month = floor_date(date, "month")) %>%  # group by month
-  summarize(
-    avg_temp = mean(sea_water_temperature, na.rm = TRUE)  # calculate mean temp
+#temp_avg <- temp %>%
+ # group_by(month = floor_date(date, "month")) %>%  # group by month
+ # summarize(
+ #   avg_temp = mean(sea_water_temperature, na.rm = TRUE)  # calculate mean temp
 
   )
 ```
@@ -643,6 +643,13 @@ tegrespodry %>%
 aprilTeg$experiment <- "Early spring"
 mayTeg$experiment <- "Late spring"
 tegulaSizes <- rbind(aprilTeg, mayTeg)
+
+tegsize <- tegrespodry %>%
+  group_by(experiment) %>%
+  summarize (
+    avg_size = mean(initial_wet_weight, na.rm = TRUE)
+  )
+
 # graph for shell data
 initialshellplot <-
 tegulaSizes %>%
@@ -681,6 +688,8 @@ tegrespo_avg <- tegrespodry %>%
   summarize(
     avg_res = mean(Respiration, na.rm = TRUE)  # calculate mean respo rate
   )
+
+summary(tegrespodry)
 
 tegmodel_april <- lm(avg_res ~ pH * temp_treatment, data=tegrespo_avg %>% filter(experiment == "a"))
 #plot(tegmodel_april) 
@@ -938,6 +947,8 @@ summary(calc_lm) # wet weight does not predict calc
 calc_out <- calc %>%
   filter(deltaTA > mean(deltaTA, na.rm = TRUE) + 3 * sd(deltaTA, na.rm = TRUE))
 
+summary(calc)
+
 # model calc with all interaction terms
 tegmodel_calc_notank <- lm(umol.cm2.hr ~ pH * temp_treatment * experiment, data=calc_new)
 anova(tegmodel_calc_notank) # pH x temp, temp x exp, ph x exp
@@ -1073,6 +1084,29 @@ shellcalc %>%
        fill = expression(paste("Temperature (",degree,"C)")),
        y = expression(Calcification~rate~(mu*mol~CaCO[3]~hr^-1)))
 ```
+
+### determine proportion of shell calc to real calc
+```{r}
+calc_avg_ish <- calc_new %>%
+  group_by(pH_treatment, temp_treatment, experiment) %>%  # group by temp and pH
+  summarize(
+    avg_calc = mean(umol.cm2.hr, na.rm = TRUE)  # calculate mean calc rate
+  )
+
+shell_avg <- shellcalc %>%
+  group_by(pH_treatment, temp_treatment) %>%  # group by temp and pH
+  summarize(
+    shell_avg = mean(umol.cm2.hr, na.rm = TRUE)  # calculate mean calc rate
+  )
+
+allshells <- shell_avg %>%
+  mutate(temp_treatment = as.factor(temp_treatment)) %>%
+  inner_join(calc_avg_ish, by = c("pH_treatment", "temp_treatment"))
+
+allshells <- allshells %>%
+  mutate(proportion = shell_avg / avg_calc)
+```
+
 ### Calc effect size plot
 ```{r}
 calc_avg<-calc_avg %>%
@@ -1224,7 +1258,7 @@ RW.Sample.Info.New <- Sample.Info.New %>%
 
 rwrespo$ID <- as.factor(rwrespo$ID)
 rwrespo <- rwrespo %>%
-  left_join(RW.Sample.Info.New %>% select(pH, experiment, ID, pCO2) %>%
+  left_join(RW.Sample.Info.New %>% select(pH, experiment, ID) %>%
   distinct(experiment, ID, .keep_all = TRUE), by = c("experiment","ID")) # bring in sample info
 
 rwrespo_clean <- rwrespo %>%
@@ -1359,6 +1393,8 @@ rwrespo_clean %>%
 
 ### GP including non-controls
 ```{r}
+summary(rwrespo_clean)
+
 # with non-control
 rwmodel_GPall <- lm(GrossPhoto ~ pH * temp_treatment * experiment, data=rwrespo_clean)
 anova(rwmodel_GPall) #model stats, exp, ph x exp sig
