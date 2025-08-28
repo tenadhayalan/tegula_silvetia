@@ -193,9 +193,9 @@ summary(Pc)
 plot(PAR, Pc)
 
 #fit a model using a Nonlinear Least Squares regression of a non-rectangular hyperbola (Marshall & Biscoe, 1980)
-curve.nlslrc= nlsLM(Pc ~ (1/(2*theta))*(AQY*PAR+Am-sqrt((AQY*PAR+Am)^2-4*AQY*theta*Am*PAR))-Rd,
+curve.nlslrc= nlsLM(Pc ~ (1/(2*theta))*(AQY*PAR+Pmax-sqrt((AQY*PAR+Pmax)^2-4*AQY*theta*Pmax*PAR))-Rd,
                   start=list(
-                    Am=(max(Pc)-min(Pc)),
+                    Pmax=(max(Pc)-min(Pc)),
                     AQY= 0.001,
                     Rd=abs(min(Pc)),
                     theta=0.6
