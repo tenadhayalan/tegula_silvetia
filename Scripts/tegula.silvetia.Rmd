@@ -210,8 +210,7 @@ temp %>%
  # group_by(month = floor_date(date, "month")) %>%  # group by month
  # summarize(
  #   avg_temp = mean(sea_water_temperature, na.rm = TRUE)  # calculate mean temp
-
-  )
+  #)
 ```
 
 # Upwelling Indices
@@ -277,26 +276,48 @@ tegfield %>%
 ### tegula size
 ```{r}
 # shell length
+
+# define bin breaks
+breaks <- seq(6, 18, by = 2)
+
 tegshelllengthplot <-
-tegsizefield %>%
-  ggplot(aes(x=shell_length)) + 
-    geom_histogram(position="dodge",bins=7,color="white", fill="peachpuff3")+
-    theme_bw() + 
-    theme(axis.text=element_text(size=15),axis.title=element_text(size=18), title = element_text(size=15))+
-    labs(x="Shell length (mm)", y="Observations")
+ggplot(tegsizefield, aes(x = shell_length)) +
+  geom_histogram(breaks = breaks, fill = "peachpuff3", color = "white") +
+  scale_x_continuous(
+    breaks = head(breaks, -1) + diff(breaks)/2,  # position labels at bin centers
+    labels = paste(head(breaks, -1), "-", tail(breaks, -1))  # show bin ranges
+  ) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 15),
+    axis.title = element_text(size = 18),
+    plot.title = element_text(size = 15)
+  ) +
+  labs(x = "Shell length (mm)", y = "Observations")
 
 # shell width
+
+# define bin breaks
+breaks <- seq(9, 21, by = 2)
+
 tegshellwidthplot <-
-tegsizefield %>%
-  ggplot(aes(x=shell_width)) + 
-    geom_histogram(position="dodge",bins=7,color="white", fill="peachpuff3")+
-    theme_bw() + 
-    theme(axis.text=element_text(size=15),axis.title=element_text(size=18), title = element_text(size=15))+
-    labs(x="Shell width (mm)", y="Observations")
+ggplot(tegsizefield, aes(x = shell_width)) +
+  geom_histogram(breaks = breaks, fill = "peachpuff3", color = "white") +
+  scale_x_continuous(
+    breaks = head(breaks, -1) + diff(breaks)/2,  # position labels at bin centers
+    labels = paste(head(breaks, -1), "-", tail(breaks, -1))  # show bin ranges
+  ) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 15),
+    axis.title = element_text(size = 18),
+    plot.title = element_text(size = 15)
+  ) +
+  labs(x = "Shell width (mm)", y = "Observations")
 
 tegshelllengthplot + tegshellwidthplot + plot_layout(axes = "collect") # put plots together
 
-ggsave("tegula field.png", path=here("Output"), width = 10, height = 6) # save to output folder
+ggsave("tegula field.png", path=here("Output"), width = 12, height = 6) # save to output folder
 
 # determine range actually collected
 allTeg <- bind_rows(aprilTeg, mayTeg) %>%
@@ -1424,6 +1445,12 @@ rwrespo_avg <- rwrespo_clean %>%
   summarize(
     avg_gp = mean(GrossPhoto, na.rm = TRUE)  # calculate mean calc rate
   )
+
+# getting temp diff
+rwrespoavgavg <- rwrespo_avg %>%
+  filter(experiment == "b") %>%
+  group_by(temp_treatment) %>%
+  summarize (avg_gp_temp = mean(avg_gp, na.rm = TRUE))
 
 # avg model
 avg_gp_model <- lm(avg_gp ~ pH * temp_treatment * experiment, data = rwrespo_avg)
