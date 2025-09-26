@@ -35,7 +35,7 @@ library("patchwork")
 path.p<-here("Data",
              "PR_2024",
              "RawO2",
-             "PI_curve") #the location of all your respirometry files
+             "Tegula") #the location of all your respirometry files
 
 # bring in all of the individual files
 file.names<-basename(list.files(path = path.p, pattern = "csv$", recursive = TRUE)) #list all csv file names in the folder and subfolders
@@ -53,7 +53,7 @@ colnames(Respo.R) <- c("FileName","Intercept", "umol.L.sec","Temp.C")
 #Load your respiration data file, with all the times, water volumes(mL), snail weight (dry weight) (g)
 Sample.Info <- read_csv(file = here("Data",
                                     "PR_2024",
-                                    "Metadata_PI.csv"))
+                                    "Metadata_combined.csv"))
 #View(Sample.Info)
 
 ##### Make sure times are consistent ####
@@ -61,6 +61,7 @@ Sample.Info <- read_csv(file = here("Data",
 # make start and stop times real times, so that we can join the data frames
 Sample.Info$start.time <- as.POSIXct(Sample.Info$start.time,format="%H:%M:%S", tz = "") #convert time from character to time
 Sample.Info$stop.time <- as.POSIXct(Sample.Info$stop.time,format="%H:%M:%S", tz = "") #convert time from character to time
+
 
 #view(Sample.Info)
 
@@ -126,16 +127,16 @@ for (i in 1: length(file.names.full)) {
 
 #export raw data and read back in as a failsafe 
 #this allows me to not have to run the for loop again 
-#write_csv(Respo.R, here("Data",
-                 #       "PR_2024",
-                 #       "Respo_final.csv"))  
+write_csv(Respo.R, here("Data",
+                        "PR_2024",
+                        "Respo_final_Teg.csv"))  
 ####----after loop----####
-#Sample.Info <- read_csv(file = here("Data",
-                     #               "PR_2024",
-                   #                 "Metadata_combined.csv"))
-#Respo.R <- read_csv(here("Data",
-                 #        "PR_2024",
-                 #        "Respo_final_clean_avg.csv"))  
+Sample.Info <- read_csv(file = here("Data",
+                                    "PR_2024",
+                                    "Metadata_combined.csv"))
+Respo.R <- read_csv(here("Data",
+                         "PR_2024",
+                         "Respo_final_clean_avg.csv"))  
 
 # Calculate Respiration rate
 
@@ -157,15 +158,15 @@ Respo.R<-Respo.R %>%
 
 # Step 1: Normalize respiration data
 Respo.R.Normalized <- Respo.R %>%
-  group_by(run, pH_treatment, Light_Dark, Species, BLANK) %>%
+  group_by(pH_treatment, Light_Dark, Species, BLANK) %>%
   summarise(umol.sec = mean(umol.sec, na.rm = TRUE), .groups = 'drop') %>%
   filter(BLANK == 1) %>%
-  dplyr::select(run, pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>%
-  right_join(Respo.R, by = c("run", "pH_treatment", "Light_Dark", "Species")) %>%
+  dplyr::select(pH_treatment, Light_Dark, Species, blank.rate = umol.sec) %>%
+  right_join(Respo.R, by = c("pH_treatment", "Light_Dark", "Species")) %>%
   mutate(
-    AFDW = as.numeric(as.character(AFDW)), # Convert to numeric
+    dry_weight = as.numeric(as.character(dry_weight)), # Convert to numeric
     umol.sec.corr = umol.sec - blank.rate,
-    umol.gram.hr = ((umol.sec.corr * 3600) / AFDW)) %>%
+    umol.gram.hr = ((umol.sec.corr * 3600) / dry_weight)) %>%
   filter(BLANK == 0)
 
 # Step 2: Pivot the data for Light and Dark

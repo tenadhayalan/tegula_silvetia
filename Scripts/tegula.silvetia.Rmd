@@ -20,6 +20,7 @@ library(nlstools)
 library(here)
 library(stringr)
 library(lmerTest)
+library(emmeans)
 library(lme4)
 library(knitr)
 require(kableExtra)
@@ -64,39 +65,36 @@ tegfield <- read.csv(here("Data","field","rw_eiseni.csv")) # tegula densities fr
 tegsizefield <- read.csv(here("Data","field","eiseni_size.csv")) # tegula size from quadrats
 ```
 
-### adding all ph and carb data together
+### adding pH data
 ```{r}
-# making tank unique per experiment
-Sample.Info <- Sample.Info %>%
-  mutate(tank_exp = paste(tank, experiment))
-
-# calculating april REAL avgs for pH and temp
-aprilPHavg <- aggregate(cbind(pH,TempInSitu) ~ tank, data = aprilpH, FUN = mean)
-aprilPHavg$tank <- as.character(aprilPHavg$tank)
-colnames(aprilPHavg) <- c("tank","pH","temp")
-
-# calculating may REAL avgs for pH and temp
-mayPHavg <- aggregate(cbind(pH,TempInSitu) ~ tank, data = maypH, FUN = mean)
-mayPHavg$tank <- as.character(mayPHavg$tank)
-colnames(mayPHavg) <- c("tank","pH","temp")
 
 # adding pH to metadata
 Sample.Info.April <-
   Sample.Info %>%
   filter(experiment == "a") %>%
-  left_join(aprilPHavg, by = "tank") 
+  left_join(
+    aggregate(cbind(pH,TempInSitu) ~ tank, data = aprilpH, FUN = mean) %>%
+    mutate(tank = as.character(tank)), 
+    by = "tank") %>%
+  rename(temp = TempInSitu)
 
 Sample.Info.May <-
   Sample.Info %>%
   filter(experiment == "b") %>%
-  left_join(mayPHavg, by = "tank") 
+  left_join(
+    aggregate(cbind(pH,TempInSitu) ~ tank, data = maypH, FUN = mean) %>%
+    mutate(tank = as.character(tank)), 
+    by = "tank") %>%
+  rename(temp = TempInSitu)
 
+# combine april and may
 Sample.Info.New <- bind_rows(Sample.Info.April,Sample.Info.May)
 
 # assigning factors
-Sample.Info.New$BLANK <- as.factor(Sample.Info.New$BLANK)
-Sample.Info.New$ID <- as.factor(Sample.Info.New$ID)
-Sample.Info.New$dry_weight <- as.numeric(Sample.Info.New$dry_weight)
+Sample.Info.New <- Sample.Info.New %>%
+  mutate(BLANK = as.factor(BLANK)) %>%
+  mutate(ID = as.factor(ID)) %>%
+  mutate(dry_weight = as.numeric(dry_weight))
 
 ```
 
@@ -133,7 +131,6 @@ AllpHData %>%
   labs(x = expression(Target~pH[T]), y = expression(Average~tank~pH[T]), color = "Experiment")
 ```
 ## carb parameters
-## carb data
 ```{r}
 aprilcarb <- aprilcarb %>%
   mutate(experiment = "Early spring")%>% # add label for experiment
@@ -170,7 +167,7 @@ carb_summary <- carb_summary %>%
     )
   ) %>%
   ungroup() %>%
-  select(SampleID, experiment, ends_with("_formatted"))
+  dplyr::select(SampleID, experiment, ends_with("_formatted"))
 
 write.csv(carb_summary, here("Data/pH_temp/carb_summary.csv"))
 ```
@@ -205,12 +202,6 @@ temp %>%
     y = expression(paste("Temperature ",degree,"C"))
   ) 
 
-# calculate averages
-#temp_avg <- temp %>%
- # group_by(month = floor_date(date, "month")) %>%  # group by month
- # summarize(
- #   avg_temp = mean(sea_water_temperature, na.rm = TRUE)  # calculate mean temp
-  #)
 ```
 
 # Upwelling Indices
@@ -218,7 +209,7 @@ temp %>%
 ## BEUTI
 ```{r, echo=FALSE}
 beuti <- beuti %>%
-  filter(year== 2024, month %in% 3:6) # select only data from March to May 2024
+  filter(year== 2024, month %in% 3:6) # dplyr::select only data from March to May 2024
 
 beuti <- beuti %>%
   mutate(date = make_date(year, month, day)) # make a column of date to combine year, month, and day
@@ -889,6 +880,74 @@ tegrespodry %>%
 
 ```
 
+### Respo metabolic scaling?
+```{r}
+# april
+tegresposcale_a <- lm(log(Respiration) ~ log(dry_weight), data = tegrespodry %>%
+                      filter(experiment == "a"))
+anova(tegresposcale_a)
+summary(tegresposcale_a) # -.91 slope
+
+  #add covariates
+tegresposcale_full_a <- lm(log(Respiration) ~ log(dry_weight) * pH * temp_treatment, 
+                         data = tegrespodry %>%
+                            filter(experiment == "a"))
+anova(tegresposcale_full_a) # no interactions
+plot(tegresposcale_full_a)
+tegresposcale_noint_a <- lm(log(Respiration) ~ log(dry_weight) + pH + temp_treatment, 
+                            data = tegrespodry %>%
+                            filter(experiment == "a"))
+anova(tegresposcale_full_a,tegresposcale_noint_a) # do not need interactions
+
+# may 
+tegresposcale_b <- lm(log(Respiration) ~ log(dry_weight), data = tegrespodry %>%
+                      filter(experiment == "b"))
+anova(tegresposcale_b)
+summary(tegresposcale_b) # -.2 slope
+
+  #add covariates
+tegresposcale_full_b <- lm(log(Respiration) ~ log(dry_weight) * pH * temp_treatment, 
+                         data = tegrespodry %>%
+                            filter(experiment == "b"))
+anova(tegresposcale_full_b) # dry weight: temp sig
+plot(tegresposcale_full_b)
+tegresposcale_noint_b <- lm(log(Respiration) ~ log(dry_weight) + pH + temp_treatment, 
+                            data = tegrespodry %>%
+                            filter(experiment == "b"))
+anova(tegresposcale_full_b,tegresposcale_noint_b) # need interactions
+
+  #calculate slopes
+tegrespodryish <- tegrespodry %>%
+  mutate(pH = as.factor(pH))
+tegresposcale_full_factor_b <- lm(log(Respiration) ~ log(dry_weight) * pH * temp_treatment, 
+                                data = tegrespodryish %>%
+                                  filter(experiment == "b"))
+anova(tegresposcale_full_factor_b)
+slopes <- emtrends(tegresposcale_full_factor_b, ~ pH * temp_treatment, var = "log(dry_weight)")
+summary(slopes)
+
+# all together now
+tegresposcale <- lm(log(Respiration) ~ log(dry_weight), data = tegrespodry)
+anova(tegresposcale)
+summary(tegresposcale)
+
+# add covariates
+tegresposcale_full <- lm(log(Respiration) ~ log(dry_weight) * pH * temp_treatment, data = tegrespodry)
+anova(tegresposcale_full) #there ARE interactions
+plot(tegresposcale_full)
+tegresposcale_noint <- lm(log(Respiration) ~ log(dry_weight) + pH + temp_treatment, data = tegrespodry)
+anova(tegresposcale_full,tegresposcale_noint) # need to include interactions
+
+# okay generate slopes per group
+tegrespodryish <- tegrespodry %>%
+  mutate(pH = as.factor(pH))
+tegresposcale_full_factor <- lm(log(Respiration) ~ log(dry_weight) * pH * temp_treatment, data = tegrespodryish)
+anova(tegresposcale_full_factor)
+slopes <- emtrends(tegresposcale_full_factor, ~ pH * temp_treatment, var = "log(dry_weight)")
+summary(slopes)
+
+```
+
 ### Respo effect size plot
 ```{r}
 tegrespo_avg <- tegrespo_avg %>%
@@ -915,11 +974,11 @@ summary(tegmodel_res_may)
 std_coefs<-as_tibble(effectsize(tegmodel_res_april)) %>% # get the effect sizes for april
   mutate(month = "Early spring") %>% # add the season
   left_join(tidy(tegmodel_res_april) %>%
-              select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
+              dplyr::select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
   bind_rows(as_tibble(effectsize(tegmodel_res_may)) %>% # bind it to the same for May
               mutate(month = "Late spring") %>%
               left_join(tidy(tegmodel_res_may) %>%
-                          select(Parameter = term, p.value))) %>%
+                          dplyr::select(Parameter = term, p.value))) %>%
   filter(Parameter != "(Intercept)") %>% # remove the intercepts for the STD Coef plot
   mutate(Parameter = case_when(Parameter == "temp_scale" ~"Temperature",
                                Parameter == "pH_scale" ~"pH",
@@ -956,7 +1015,7 @@ tegrespoplot <-
 calc_new <- calc %>%
   mutate(ID = as.factor(ID)) %>%
   left_join(Teg.Sample.Info.New %>% 
-              select(ID,pH,experiment)) %>%
+            dplyr::select(ID,pH,experiment)) %>%
   mutate(temp_treatment = as.factor(temp_treatment)) %>%
   mutate(experiment = as.factor(experiment))
 
@@ -1027,17 +1086,6 @@ avg_calc_model <- lm(avg_calc ~ pH * temp_treatment * experiment, data = calc_av
 anova(avg_calc_model) # ph x exp, temp x exp
 summary(avg_calc_model) 
 
-
-# without outliers
-calc_out <- calc_new %>%
-  filter(!deltaTA > mean(deltaTA, na.rm = TRUE) + 3 * sd(deltaTA, na.rm = TRUE)) 
-
-# calculate averages without outliers
-calc_avg_out <- calc_out %>%
-  group_by(pH, temp_treatment, experiment) %>%  # group by temp and pH
-  summarize(
-    avg_calc = mean(umol.cm2.hr, na.rm = TRUE)  # calculate mean calc rate
-  )
 
 # april avg model
 avg_calc_model_april <- lm(avg_calc ~ pH * temp_treatment, data = calc_avg_out %>% filter(experiment == "a"))
@@ -1154,11 +1202,11 @@ summary(tegmodel_cal_may)
 std_coefs<-as_tibble(effectsize(tegmodel_cal_april)) %>% # get the effect sizes for april
   mutate(month = "Early spring") %>% # add the month
   left_join(tidy(tegmodel_cal_april) %>%
-              select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
+              dplyr::select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
   bind_rows(as_tibble(effectsize(tegmodel_cal_may)) %>% # bind it to the same for May
               mutate(month = "Late spring") %>%
               left_join(tidy(tegmodel_cal_may) %>%
-                          select(Parameter = term, p.value))) %>%
+                          dplyr::select(Parameter = term, p.value))) %>%
   filter(Parameter != "(Intercept)") %>% # remove the intercepts for the STD Coef plot
   mutate(Parameter = case_when(Parameter == "temp_scale" ~"Temperature",
                                Parameter == "pH_scale" ~"pH",
@@ -1193,10 +1241,10 @@ std_coefs %>%
 ### C:R
 ```{r eval=FALSE,echo=FALSE}
 tegcalcresp <- tegrespodry %>%
-  select(ID,experiment,Respiration,pH,temp_treatment) %>%
+  dplyr::select(ID,experiment,Respiration,pH,temp_treatment) %>%
   left_join(calc %>%
               mutate(ID = as.factor(ID)) %>%
-              select(ID, experiment,umol.cm2.hr)) %>%
+              dplyr::select(ID, experiment,umol.cm2.hr)) %>%
   mutate(calc_r = umol.cm2.hr/Respiration) %>%
   filter(calc_r < 0.075, calc_r > -0.07)
 
@@ -1279,7 +1327,7 @@ RW.Sample.Info.New <- Sample.Info.New %>%
 
 rwrespo$ID <- as.factor(rwrespo$ID)
 rwrespo <- rwrespo %>%
-  left_join(RW.Sample.Info.New %>% select(pH, experiment, ID) %>%
+  left_join(RW.Sample.Info.New %>% dplyr::select(pH, experiment, ID) %>%
   distinct(experiment, ID, .keep_all = TRUE), by = c("experiment","ID")) # bring in sample info
 
 rwrespo_clean <- rwrespo %>%
@@ -1345,18 +1393,17 @@ rwrespo_clean %>%
 ```
 
 ### GP with predation
-```{r eval = FALSE, echo = FALSE}
+```{r, echo = FALSE}
 # start with april, do we see differences with predation?
-rwmodelGP_a <- lm(GrossPhoto ~ pH * temp_treatment * (tank/predator), data=rwrespo_clean %>% filter(experiment == "a"))
+rwmodelGP_a <- lm(GrossPhoto ~ pH * temp_treatment * predator, data=rwrespo_clean %>% filter(experiment == "a"))
 anova(rwmodelGP_a) #model stats, pH sig
 summary(rwmodelGP_a)
 
-rwmodelGP_aR_full <- lmer(GrossPhoto ~ pH * temp_treatment + (1 | tank/predator), 
+rwmodelGP_aR_full <- lm(GrossPhoto ~ pH * temp_treatment + predator, 
                     data = rwrespo_clean %>% filter(experiment == "a"))
-rwmodelGP_aR_reduced <- lmer(GrossPhoto ~ pH * temp_treatment + (1 | tank), 
+rwmodelGP_aR_reduced <- lm(GrossPhoto ~ pH * temp_treatment, 
                       data = rwrespo_clean %>% filter(experiment == "a"))
 anova(rwmodelGP_aR_reduced,rwmodelGP_aR_full)
-
 
 
 rwrespo_clean %>% 
@@ -1381,13 +1428,13 @@ rwrespo_clean %>%
 
 # what about may?
 
-rwmodelGP_bR_full <- lmer(GrossPhoto ~ pH * temp_treatment + (1 | tank/predator), 
+rwmodelGP_bR_full <- lm(GrossPhoto ~ pH * temp_treatment + predator, 
                     data = rwrespo_clean %>% filter(experiment == "b"))
-rwmodelGP_bR_reduced <- lmer(GrossPhoto ~ pH * temp_treatment + (1 | tank), 
+rwmodelGP_bR_reduced <- lm(GrossPhoto ~ pH * temp_treatment, 
                       data = rwrespo_clean %>% filter(experiment == "b"))
 anova(rwmodelGP_bR_reduced,rwmodelGP_bR_full)
 
-rwmodelGP_b <- lm(GrossPhoto ~ pH * temp_treatment * (tank/predator), data=rwrespo_clean %>% filter(experiment == "b"))
+rwmodelGP_b <- lm(GrossPhoto ~ pH * temp_treatment * (predator), data=rwrespo_clean %>% filter(experiment == "b"))
 anova(rwmodelGP_b) #model stats, nothing sig
 summary(rwmodelGP_b)
 
@@ -1528,11 +1575,11 @@ summary(rwmodel_gp_may)
 std_coefs<-as_tibble(effectsize(rwmodel_gp_april)) %>% # get the effect sizes for april
   mutate(month = "Early spring") %>% # add the month
   left_join(tidy(rwmodel_gp_april) %>%
-              select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
+              dplyr::select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
   bind_rows(as_tibble(effectsize(rwmodel_gp_may)) %>% # bind it to the same for May
               mutate(month = "Late spring") %>%
               left_join(tidy(rwmodel_gp_may) %>%
-                          select(Parameter = term, p.value))) %>%
+                          dplyr::select(Parameter = term, p.value))) %>%
   filter(Parameter != "(Intercept)") %>% # remove the intercepts for the STD Coef plot
   mutate(Parameter = case_when(Parameter == "temp_scale" ~"Temperature",
                                Parameter == "pH_scale" ~"pH",
@@ -1595,15 +1642,15 @@ rwrespo_clean %>%
 ```
 
 ### Respo with predation in model
-```{r eval=FALSE, echo=FALSE}
+```{r  echo=FALSE}
 # start with april, do we see differences with predation?
-rwmodelR_aR_full <- lmer(Respiration ~ pH * temp_treatment + (1 | tank/predator), 
+rwmodelR_aR_full <- lm(Respiration ~ pH * temp_treatment + predator, 
                     data = rwrespo_clean %>% filter(experiment == "a"))
-rwmodelR_aR_reduced <- lmer(Respiration ~ pH * temp_treatment + (1 | tank), 
+rwmodelR_aR_reduced <- lm(Respiration ~ pH * temp_treatment, 
                       data = rwrespo_clean %>% filter(experiment == "a"))
 anova(rwmodelR_aR_reduced,rwmodelR_aR_full)
 
-rwmodelRP_a <- lm(Respiration ~ pH * temp_treatment * (tank / predator), 
+rwmodelRP_a <- lm(Respiration ~ pH * temp_treatment * predator, 
               data = rwrespo_clean %>% filter(experiment == "a"))
 anova(rwmodelRP_a) #model stats, pH x temp, ph x temp x tank
 summary(rwmodelRP_a)
@@ -1629,13 +1676,13 @@ rwrespo_clean %>%
   )
 
 # what about may?
-rwmodelR_bR_full <- lmer(Respiration ~ pH * temp_treatment + (1 | tank/predator), 
+rwmodelR_bR_full <- lm(Respiration ~ pH * temp_treatment + predator, 
                     data = rwrespo_clean %>% filter(experiment == "b"))
-rwmodelR_bR_reduced <- lmer(Respiration ~ pH * temp_treatment + (1 | tank), 
+rwmodelR_bR_reduced <- lm(Respiration ~ pH * temp_treatment, 
                       data = rwrespo_clean %>% filter(experiment == "b"))
 anova(rwmodelR_bR_reduced,rwmodelR_bR_full)
 
-rwmodelRP_b <- lm(Respiration ~ pH * temp_treatment * (tank / predator), 
+rwmodelRP_b <- lm(Respiration ~ pH * temp_treatment * predator, 
                   data=rwrespo_clean %>% filter(experiment == "b"))
 anova(rwmodelRP_b) #model stats, temp sig
 summary(rwmodelRP_b)
@@ -1769,11 +1816,11 @@ summary(rwmodel_res_may)
 std_coefs<-as_tibble(effectsize(rwmodel_res_april)) %>% # get the effect sizes for april
   mutate(month = "Early spring") %>% # add the month
   left_join(tidy(rwmodel_res_april) %>%
-              select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
+              dplyr::select(Parameter = term, p.value)) %>% # bring in the p-values from the summary of the model (which is now correct now that the values are standardized -- Note you STILL report the ANOVA results when talking about your significance in the model.  These p-values essentially tell you if the values are different or not from your intercept (essentiall 0))
   bind_rows(as_tibble(effectsize(rwmodel_res_may)) %>% # bind it to the same for May
               mutate(month = "Late spring") %>%
               left_join(tidy(rwmodel_res_may) %>%
-                          select(Parameter = term, p.value))) %>%
+                          dplyr::select(Parameter = term, p.value))) %>%
   filter(Parameter != "(Intercept)") %>% # remove the intercepts for the STD Coef plot
   mutate(Parameter = case_when(Parameter == "temp_scale" ~"Temperature",
                                Parameter == "pH_scale" ~"pH",
@@ -1891,7 +1938,7 @@ rwrespo_clean %>%
 ## C:N Ratio
 ```{r eval = FALSE, echo = FALSE}
 cn <- cn %>%
-  left_join(aprilpH %>% filter(date == 20240402) %>% select(tank, expected_pH, expected_temp), by = "tank")
+  left_join(aprilpH %>% filter(date == 20240402) %>% dplyr::select(tank, expected_pH, expected_temp), by = "tank")
 
 cn<-cn %>%
   mutate(weight_ug = weight_mg*1000, # convert weight to micrograms
