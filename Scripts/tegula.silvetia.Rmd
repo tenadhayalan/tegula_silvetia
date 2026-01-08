@@ -938,33 +938,6 @@ avg_calc_model <- lm(avg_calc ~ pH * temp_treatment * experiment, data = calc_av
 anova(avg_calc_model) # ph x exp, temp x exp
 summary(avg_calc_model) 
 
-# without outliers
-calc_out <- calc_new %>%
-  filter(!deltaTA > mean(deltaTA, na.rm = TRUE) + 3 * sd(deltaTA, na.rm = TRUE)) 
-
-# calculate averages without outliers
-calc_avg_out <- calc_out %>%
-  group_by(pH, temp_treatment, experiment) %>%  # group by temp and pH
-  summarize(
-    avg_calc = mean(umol.cm2.hr, na.rm = TRUE)  # calculate mean calc rate
-  )
-
-
-# april avg model
-avg_calc_model_april <- lm(avg_calc ~ pH * temp_treatment, data = calc_avg_out %>% filter(experiment == "a"))
-anova(avg_calc_model_april) # nothing sig
-summary(avg_calc_model_april) 
-
-# may avg model
-avg_calc_model_may <- lm(avg_calc ~ pH * temp_treatment, data = calc_avg_out %>% filter(experiment == "b"))
-anova(avg_calc_model_may) # pH and temp sig
-summary(avg_calc_model_may) 
-
-# avg model altogether
-avg_calc_model <- lm(avg_calc ~ pH * temp_treatment * experiment, data = calc_avg_out)
-anova(avg_calc_model) # ph x exp, temp x exp
-summary(avg_calc_model) 
-
 # avg plot
 
 # predict using model
