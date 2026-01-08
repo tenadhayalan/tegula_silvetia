@@ -232,17 +232,18 @@ Ik <- Pmax.gross/AQY
 Respo.R.Normalized %>%
   ggplot(aes(x = run, y = umol.gram.hr, color = as.factor(temp_treatment)))+
   geom_point(alpha = 0.3)+
+  theme_bw()+
   stat_function(fun = model_fun, color = "#0EAD69", size = 1.2) +
   scale_color_manual(values = c("skyblue2", "firebrick1")) +
   theme(
     strip.background = element_rect(fill = "white"),
-    text = element_text(size = 18)) +
+    text = element_text(size = 20)) +
   labs(x = expression("Photon Flux Density ("*mu*"mol photons "*m^-2*s^-1*")"),
-       y = expression(Photosynthetic~Rate* " ("*mu*"mol "*O[2]*" "*g^-2*h^-1*")"),
+       y = expression(Net~Photosynthesis* " ("*mu*"mol "*O[2]*" "*g^-2*h^-1*")"),
        color = expression(paste("Temperature (",degree,"C)")))+
   geom_vline(xintercept = Ik, col = "black", lty = 3, lwd = 1)+ 
-  annotate("text", x = 425, y = 1.0, label = expression(I[k]))+
-  theme_bw()
+  annotate("text", x = 425, y = 1.0, label = expression(I[k]))
+  
 
 ggsave("PI curve.png", path=here("Output"), width = 10, height = 6)
 
