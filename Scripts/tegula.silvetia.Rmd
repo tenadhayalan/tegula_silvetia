@@ -1130,18 +1130,18 @@ rwrespo_avg_p %>%
   summarize(mean(avg_gp)) 
 
 # predict using model
-rwrespo_clean <- rwrespo_clean %>%
+rwrespo_clean_plot <- rwrespo_clean %>%
   mutate(predicted_gp = predict(rwmodelGP_Pb, newdata = rwrespo_clean))
 
-predictions <- predict(rwmodelGP_Pb, newdata = rwrespo_clean, interval = "confidence")
+predictions <- predict(rwmodelGP_Pb, newdata = rwrespo_clean_plot, interval = "confidence")
 
 # add predictions and confidence intervals to calc_new
-rwrespo_clean <- rwrespo_clean %>%
+rwrespo_clean_plot <- rwrespo_clean_plot %>%
   mutate(predicted_gp = predictions[, "fit"],
          lower_ci = predictions[, "lwr"],  # Lower confidence bound
          upper_ci = predictions[, "upr"])  # Upper confidence bound
 
-rwrespo_clean %>% 
+rwrespo_clean_plot %>% 
   filter(experiment == "b") %>%
    ggplot(aes(x = pH, y = GrossPhoto, color = as.factor(temp_treatment), 
               fill = as.factor(temp_treatment))) +
@@ -1373,25 +1373,25 @@ std_coefs %>%
 ```{r rw-respo}
 
 # calculate averages
-rwrespo_avg <- rwrespo_clean %>%
+rwrespo_avg_p <- rwrespo_clean %>%
   group_by(pH, temp_treatment, experiment, predator) %>%  # group by temp and pH
   summarize(
     avg_respo = mean(Respiration, na.rm = TRUE)  # calculate mean calc rate
   )
 
 # avg model april
-avg_respo_model_april <- lm(avg_respo ~ pH * temp_treatment * predator, data = rwrespo_avg %>% filter(experiment == "a"))
+avg_respo_model_april <- lm(avg_respo ~ pH * temp_treatment * predator, data = rwrespo_avg_p %>% filter(experiment == "a"))
 anova(avg_respo_model_april) # ph x temp sig
 summary(avg_respo_model_april)
 
 # avg model may
-avg_respo_model_may <- lm(avg_respo ~ pH * temp_treatment * predator, data = rwrespo_avg %>% filter(experiment == "b"))
+avg_respo_model_may <- lm(avg_respo ~ pH * temp_treatment * predator, data = rwrespo_avg_p %>% filter(experiment == "b"))
 anova(avg_respo_model_may) # nothing
 summary(avg_respo_model_may)
 
 
 # avg model for plot
-avg_respo_model <- lm(avg_respo ~ pH * temp_treatment * experiment, data = rwrespo_avg)
+avg_respo_model <- lm(avg_respo ~ pH * temp_treatment * experiment, data = rwrespo_avg_p)
 anova(avg_respo_model) # temp sig
 summary(avg_respo_model)
 
