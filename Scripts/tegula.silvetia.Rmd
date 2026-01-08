@@ -1291,7 +1291,7 @@ rwrespo_clean %>%
 ```
 
 ### Effect size plot (supplement)
-```{r rw-gp-plot}
+```{r rw-gp-plot-supp}
 rwrespo_avg_p <- rwrespo_clean %>%
   group_by(pH, temp_treatment, experiment, predator) %>%  # group for predator vs control per tank
   summarize(
@@ -1396,25 +1396,25 @@ anova(avg_respo_model) # temp sig
 summary(avg_respo_model)
 
 # predict using model
-rwrespo_clean <- rwrespo_clean %>%
+rwrespo_clean_plot <- rwrespo_clean %>%
   mutate(predicted_respo = predict(avg_respo_model, newdata = rwrespo_clean))
 
-predictions <- predict(avg_respo_model, newdata = rwrespo_clean, interval = "confidence")
+predictions <- predict(avg_respo_model, newdata = rwrespo_clean_plot, interval = "confidence")
 
 # Add predictions and confidence intervals to calc_new
-rwrespo_clean <- rwrespo_clean %>%
+rwrespo_clean_plot <- rwrespo_clean %>%
   mutate(predicted_respo = predictions[, "fit"],
          lower_ci = predictions[, "lwr"],  # Lower confidence bound
          upper_ci = predictions[, "upr"])  # Upper confidence bound
 
 # avg plot
 avgrwrespoplot <-
-rwrespo_clean %>%
+rwrespo_clean_plot %>%
   ggplot(aes(x = pH, y = Respiration, color = as.factor(temp_treatment), fill = as.factor(temp_treatment))) +
   facet_wrap(~experiment, labeller = as_labeller(c("a" = "Early spring", "b" = "Late spring"))) +
   geom_point(alpha = 0.1) + # raw data
   geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, fill = as.factor(temp_treatment)), alpha = 0.3, color = NA) + # confidence interval
-  geom_point(data = rwrespo_avg, aes(y = avg_respo), 
+  geom_point(data = rwrespo_avg_p, aes(y = avg_respo), 
              color = "black", size = 2, alpha = 0.8, shape = 21) +  
   geom_line(aes(y = predicted_respo), size = 1.2) + # add model line
   theme_bw() +
@@ -1430,7 +1430,11 @@ rwrespo_clean %>%
 
 ### Respo effect size plot
 ```{r rw-respo-plot}
-rwrespo_avg <- rwrespo_avg %>%
+rwrespo_avg <- rwrespo_clean %>%
+  group_by(pH, temp_treatment, experiment) %>%  # group by temp and pH
+  summarize(
+    avg_respo = mean(Respiration, na.rm = TRUE)  # calculate mean calc rate
+  ) %>%
   ungroup() %>%
   mutate(temp_num = as.numeric(as.character(temp_treatment))) %>% # make temp a number
   mutate(pH_scale = as.numeric(scale(pH)), # scale the values so that you can calculated standardized effects
@@ -1625,7 +1629,7 @@ rwrespo_clean %>%
 # Patchworked Figures
 ```{r patchwork-figs}
 # standardized effect size response plots
-rwrespoplot + rwplot + tegrespoplot + tegcalcplot + plot_layout(guides = "collect", axes = "collect")
+rwrespoplot + rwgpplot + tegrespoplot + tegcalcplot + plot_layout(guides = "collect", axes = "collect")
 
 # raw response plots
 avgrwrespoplot <-
@@ -1648,7 +1652,7 @@ avgcalcplot <-
   scale_x_continuous(breaks = c(7.2, 7.6, 8.0))+
   labs(y = expression(atop(Calcification~rate,(mu*mol~CaCO[3]~g^-1~hr^-1))))
 
-avgrwrespoplot + rwpredplot + avgtegrespoplot + avgcalcplot + plot_layout(guides = "collect", axes = "collect_x")
+avgrwrespoplot + avggpplot + avgtegrespoplot + avgcalcplot + plot_layout(guides = "collect", axes = "collect_x")
 
 #ggsave("raw responses.png", path=here("Output"), width = 10, height = 8)
 
@@ -1658,18 +1662,3 @@ rwrespopredplot+ rwgppredplot + plot_layout(guides="collect", axes = "collect_y"
 
 ```
 
-# Stats summary tables
-```{r}
-# Tegula respiration tables using rempsyc package
-teg_respo_tables <- anova(avg_res_model_april, avg_res_model_may)
-teg_respo_tables_tidy <- tidy(teg_respo_tables)
-
-teg_respo_tables
-
-teg_respo_april_table <- tidy(avg_res_model_april)
-nice_table(teg_respo_april_table)
-
-teg_respo_may_table <- tidy(avg_res_model_may)
-nice_table(teg_respo_may_table)
-
-```
