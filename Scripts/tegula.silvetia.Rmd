@@ -402,7 +402,8 @@ tegrespodry %>%
 # get shell data in one place for graph
 aprilTeg$experiment <- "Early spring"
 mayTeg$experiment <- "Late spring"
-tegulaSizes <- rbind(aprilTeg, mayTeg)
+tegulaSizes <- rbind(aprilTeg, mayTeg) %>%
+  filter(!is.na(dry_shell))
 
 tegsize <- tegrespodry %>%
   group_by(experiment) %>%
@@ -413,7 +414,6 @@ tegsize <- tegrespodry %>%
 # graph for shell data
 initialshellplot <-
 tegulaSizes %>%
-  filter(!is.na(dry_shell)) %>%
   ggplot(aes(x=pH, y=shell_length2))+
  facet_wrap(~experiment)+
   geom_point(aes(color = as.factor(temp), fill = as.factor(temp)), alpha = 0.5)+
@@ -976,9 +976,10 @@ calc_new %>%
 ### Shell calcification
 ```{r}
 shellcalc %>%
+  filter(is.na(sample_type)) %>%
+  distinct() %>%
   ggplot(aes(x=pH_treatment, y=umol.cm2.hr, color = as.factor(temp_treatment),fill=as.factor(temp_treatment)))+
-  geom_point(alpha = 0.2)+
-  #geom_smooth(method = "lm", se = TRUE) +
+  geom_point(alpha = 1)+
   theme_bw() +
   theme(strip.background = element_rect(fill = "white"),
         text = element_text(size = 16)) +
